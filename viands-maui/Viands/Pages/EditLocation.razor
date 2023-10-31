@@ -1,0 +1,373 @@
+@page "/editlocation"
+
+@using System.Diagnostics;
+@using Viands.Components
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using static Viands.Pages.ViewList;
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@implements IDisposable
+
+<div class="status-bar-safe-area"></div>
+
+<div class="location_buttons @(DisplayUtils.ShowEditorButtonTitles ? "titles_showing" : null)">
+    <span class="location_buttons_left">
+        @if (!Singleton)
+        {
+            Debug.WriteLine("isDirty: " + isDirty);
+            <NavToolButton NavTool=@NavTools.GetEditorTool(
+                NavTools.ToolTypes.AddLocation, AddNewLocation,
+                LocationId == 0 || isDirty
+            ) />
+        }
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.ShowButtonTitles
+        ) />
+    </span>
+    <span class="location_buttons_right">
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.SaveLocation,
+            SaveLocationInfo, !isDirty, (isDirty ? "savable" : null)
+        ) />
+        @if (!Singleton)
+        {
+            <span class="joined_buttons">
+                <NavToolButton NavTool=@NavTools.GetEditorTool(
+                    NavTools.ToolTypes.EditorPrevButton,
+                    GoPrev, !CanGoPrev()
+                ) />
+                <NavToolButton NavTool=@NavTools.GetEditorTool(
+                    NavTools.ToolTypes.EditorNextButton,
+                    GoNext, !CanGoNext()
+                ) />
+            </span>
+        }
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.EditorCloseButton, CloseDialog
+        ) />
+    </span>
+</div>
+
+<span @ref=ScrollTo[0]></span>
+<h5>@(AddEdit ? "Add" : "Edit") Location</h5>
+<RadzenColumn Size="12" SizeSM="6">
+    <RadzenStack Gap="8px">
+        <span @ref=ScrollTo[1] ></span>
+        @if (LocationInfo != null)
+        {
+            <RadzenFormField Variant="@Variant.Outlined" Text="Name">
+                <RadzenTextBox
+                    @bind-Value="@LocationInfo.Name"
+                    class="edit_location_input"
+                    @onblur=@(() => CheckInputFocus(-1))
+                    @onfocus=@(() => CheckInputFocus(0))
+                    @oninput=@(() => {
+                        ClearError(0);
+                        isDirty = true;
+                    })
+                />
+                <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(0) ? InputErrors[0] : null)</i>
+            </RadzenFormField>
+            <span @ref=ScrollTo[2]></span>
+            <RadzenFormField Variant="@Variant.Outlined" Text="Address">
+                <RadzenTextBox 
+                    @bind-Value="@LocationInfo.Address"
+                    class="edit_location_input"
+                    @onblur=@(() => CheckInputFocus(-1))
+                    @onfocus=@(() => CheckInputFocus(1))
+                    @oninput=@(() => {
+                        ClearError(1);
+                        isDirty = true;
+                    })
+                />
+                <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(1) ? InputErrors[1] : null)</i>
+            </RadzenFormField>
+            <span @ref=ScrollTo[3]></span>
+            <RadzenRow Orientation="Orientation.Horizontal" Gap="1px">
+                <div class="edit_location_multirow">
+                    <RadzenFormField Variant="@Variant.Outlined" Text="City" class="edit_location_multirow_left">
+                        <RadzenTextBox 
+                            @bind-Value="@LocationInfo.City"
+                            class="edit_location_input"
+                            @onblur=@(() => CheckInputFocus(-1))
+                            @onfocus=@(() => CheckInputFocus(2))
+                            @oninput=@(() => {
+                                ClearError(2);
+                                isDirty = true;
+                            }) 
+                        />
+                        <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(2) ? InputErrors[2] : null)</i>
+                    </RadzenFormField>
+                    <RadzenFormField Variant="@Variant.Outlined" Text="Zip" class="edit_location_multirow_right">
+                        <RadzenTextBox 
+                            @bind-Value="@LocationInfo.Zip"
+                            class="edit_location_input"
+                            @onblur=@(() => CheckInputFocus(-1))
+                            @onfocus=@(() => CheckInputFocus(2))
+                            @oninput=@(() => {
+                                ClearError(3);
+                                isDirty = true;
+                            }) 
+                        />
+                        <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(3) ? InputErrors[3] : null)</i>
+                    </RadzenFormField>
+                </div>
+            </RadzenRow>
+            <RadzenFormField Variant="@Variant.Outlined" Text="Description">
+                <RadzenTextArea 
+                    @bind-Value="@LocationInfo.Description"
+                    class="edit_location_input"
+                    @onblur=@(() => CheckInputFocus(-1))
+                    @onfocus=@(() => CheckInputFocus(3))
+                    @oninput=@(() => {
+                        ClearError(4);
+                        isDirty = true;
+                    }) 
+                />
+                <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(4) ? InputErrors[4] : null)</i>
+            </RadzenFormField>
+            <RadzenFormField Variant="@Variant.Outlined" Text="Coordinates">
+                <RadzenTextBox Disabled="true" value="@(LocationInfo.Coordinates ?? " ")" />
+            </RadzenFormField>
+        }
+    </RadzenStack>
+</RadzenColumn>
+
+<div id="form_spacer" style="height:200px"></div>
+
+
+@code {
+
+    [Parameter]
+    public int LocationId { get; set; }
+
+    [Parameter]
+    public bool IsFirst { get; set; }
+
+    [Parameter]
+    public bool IsLast { get; set; }
+
+    [Parameter]
+    public bool Singleton { get; set; }
+
+    [Parameter]
+    public bool AddEdit { get; set; }
+
+    private VLocation LocationInfo { get; set; } = new VLocation();
+    private Dictionary<int, ElementReference> ScrollTo = new Dictionary<int, ElementReference>();
+    private Dictionary<int, string> InputErrors = new Dictionary<int, string>();
+    private IJSObjectReference EditLocationJS { get; set; }
+    private List<VLocation> LocationsList = new List<VLocation>();
+    private bool jsModLoaded = false;
+    private bool isDirty = false;
+
+    private bool CanGoNext()
+    {
+        if (!IsLast) return true;
+        return false;
+    }
+
+    private bool CanGoPrev()
+    {
+        if (IsFirst || LocationId == 0) return false;
+        return true;
+    }
+
+    private async void GoNext(dynamic? args)
+    {
+        if (CanGoNext())
+            await GoNextPrev(GlobalCallbacks.CBKeys.EditNextLocation);
+    }
+
+    private async void GoPrev(dynamic? args)
+    {
+        if(CanGoPrev())
+            await GoNextPrev(GlobalCallbacks.CBKeys.EditPrevLocation);
+    }
+
+    private async Task GoNextPrev(GlobalCallbacks.CBKeys type)
+    {
+        if (await CheckDirtyAndSave())
+        {
+            GlobalCallbacks.Trigger(type, new GlobalCallbacks.EditLocationResponse
+            {
+                LocationId = LocationId,
+                IsFirst = IsFirst,
+                IsLast = IsLast
+            });
+        }
+    }
+
+    private string InputError(int index)
+    {
+        return InputErrors[index];
+    }
+
+    private void ClearError(int index)
+    {
+        if (InputErrors.ContainsKey(index))
+        {
+            InputErrors[index] = null;
+            StateHasChanged();    
+        }
+    }
+
+    private async void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.EditLocation:
+                var editlocationresponse = (args as GlobalCallbacks.EditLocationResponse);
+                LocationId = editlocationresponse.LocationId;
+                IsFirst = editlocationresponse.IsFirst;
+                IsLast = editlocationresponse.IsLast;
+                await BuildLocationInfo();
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.ShowEditorButtonTitles:
+            case GlobalCallbacks.CBKeys.HideEditorButtonTitles:
+                StateHasChanged();
+                break;
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        await BuildLocationInfo();
+        await base.OnInitializedAsync();
+    }
+
+    private async Task BuildLocationInfo()
+    {
+        LocationInfo = LocationId == 0 ? new VLocation() : await VLocation.Init(LocationId);
+    }
+
+    void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            EditLocationJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/EditLocation.razor.js");
+            await EditLocationJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async void CheckInputFocus(int index)
+    {
+        await EditLocationJS.InvokeVoidAsync("CheckModalFocus", index > -1 ? ScrollTo[index] : null );
+    }
+
+    private async void SaveLocationInfo(dynamic? args)
+    {
+        await SaveLocationInfo();
+    }
+
+    private async Task<bool> SaveLocationInfo()
+    {
+        if (LocationInfo == null || !isDirty) return false;
+        if (string.IsNullOrEmpty(LocationInfo.Name))
+        {
+            InputErrors[0] = "Location name required";
+            StateHasChanged();
+            return false;
+        }
+        LocationInfo.Id = await VLocation.SaveLocation(LocationInfo);
+        isDirty = false;
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.NewLocationAdded, LocationInfo.Id);
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+        StateHasChanged();
+        if (Singleton)
+        {
+            await CloseDialog();
+        }
+        else
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditLocation, new GlobalCallbacks.EditLocationResponse
+            {
+                LocationId = LocationInfo.Id,
+                IsFirst = false,
+                IsLast = true,
+                AddEdit = false,
+            });
+        }
+        return true;
+    }
+
+    private void AddNewLocation(dynamic? args)
+    {
+        if (LocationInfo == null || LocationId == 0 || isDirty) return;
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditLocation, new GlobalCallbacks.EditLocationResponse
+        {
+            LocationId = 0,
+            Singleton = false,
+            IsFirst = false,
+            IsLast = true,
+            AddEdit = true
+        });
+    }
+
+    private async Task<bool> CheckDirtyAndSave()
+    {
+        var saveChanges = false;
+        if (isDirty)
+        {
+            saveChanges = await DialogService.Confirm(
+                "You have unsaved changes.", "Close Edit Locations",
+                new ConfirmOptions()
+                    {
+                        CssClass = "confirm_lose_changes",
+                        OkButtonText = "Save & Close",
+                        CancelButtonText = "Close",
+                        CloseDialogOnEsc = false
+                    }
+            ) ?? false;
+        }
+        if (saveChanges)
+        {
+            if(!await SaveLocationInfo())
+            {
+                return false;
+            }
+        }
+        isDirty = false;
+        return true;
+    }
+
+    private async void CloseDialog(dynamic? args)
+    {
+        await CloseDialog();
+    }
+
+    private async Task CloseDialog()
+    {
+        if (await CheckDirtyAndSave())
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.CloseDialog, null);
+        }
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    [JSInvokable("MakeDirty")]
+    public void MakeDirty()
+    {
+        isDirty = true;
+        StateHasChanged();
+    }
+}

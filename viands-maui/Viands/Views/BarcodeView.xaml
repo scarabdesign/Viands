@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+    xmlns:cv="clr-namespace:Camera.MAUI;assembly=Camera.MAUI"
+    Size="250, 200"
+    x:Class="Viands.BarcodeView">
+    <VerticalStackLayout BackgroundColor="Black" >
+        <VerticalStackLayout.GestureRecognizers>
+            <TapGestureRecognizer Tapped="ToggleFlash"/>
+        </VerticalStackLayout.GestureRecognizers>
+        <cv:CameraView 
+            x:Name="cameraView" 
+            WidthRequest="340" 
+            HeightRequest="200"
+            BarCodeDetectionEnabled="True"
+            CamerasLoaded="CameraView_CamerasLoaded"
+            BarcodeDetected="CameraView_BarcodeDetected"
+            TorchEnabled="True"
+        />
+    </VerticalStackLayout>
+</toolkit:Popup>

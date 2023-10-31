@@ -1,0 +1,225 @@
+@page "/selectset"
+
+@using System.Diagnostics;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="modaltop_buttons">
+    <a class="nav-link sidebar-link" @onclick=@ToggleFilter title="Filter Sets">
+        <Blazicon Svg=GoogleMaterialOutlinedIcon.Search class="filtersets_button" />
+    </a>
+    <h5>Add Product Set@(SelectMultiple ? "s" : null)</h5>
+    @if (ShowFilter)
+    {
+        <RadzenFormField Variant="Variant.Outlined" class="filter_sets_container">
+            <ChildContent>
+                <RadzenTextBox 
+                    @bind-Value=@FilterValue
+                    @ref=FilterInput
+                    @oninput=@((e) => {
+                    FilterValue = e.Value.ToString();
+                    RefreshSetList();
+                }) />
+            </ChildContent>
+            <End>
+                <RadzenButton Icon="close" Click="ClearFilterInput" Variant="Variant.Text" Size="ButtonSize.Small" />
+            </End>
+        </RadzenFormField>
+    }
+    <span>
+        <a class="nav-link sidebar-link @(SelectMultiple ? null : "hide")" @onclick=@AddSetsToList title="Add Selected Sets to List">
+            <Blazicon Svg=GoogleMaterialFilledIcon.SaveAlt class="saveselections_button" />
+        </a>
+        <a class="nav-link sidebar-link @(SelectMultiple ? "highlight_green" : null)" @onclick=@ToggleSelectMultiple title="Select @(SelectMultiple ? "Single" : "Multiple")">
+            <Blazicon Svg=MdiIcon.CheckboxMultipleBlankCircleOutline class="multiple_button" />
+        </a>
+        <a class="nav-link sidebar-link" @onclick=@Close title="Close">
+            <Blazicon Svg=MdiIcon.Cancel class="close_button" />
+        </a>
+    </span>
+</div>
+
+<div class="setlist @(ShowFilter ? "show_filter" : null)">
+    @if (Sets != null)
+    {
+        foreach(var set in Sets)
+        {
+            <label class="lists_item" @onclick=@(() => SetItemClicked(set.Id))>
+                @if (SelectMultiple)
+                {
+                    <RadzenCheckBox 
+                        @ref=MultiSelectChecks[set.Id]
+                        @bind-Value=@MultiSelectChecksMarked[set.Id]
+                        TValue="bool"
+                        TabIndex="-1"
+                        class="selectset_checkbox" 
+                    />    
+                }
+                @set.Name
+            </label>
+        }
+    }
+</div>
+
+@code {
+
+    [Parameter]
+    public int ListId { get; set; }
+
+    [Parameter]
+    public bool ShowAddNew { get; set; }
+
+    private List<VList> Sets;
+    private bool SelectMultiple;
+    private bool ShowFilter;
+    private bool jsModLoaded = false;
+    private string FilterValue;
+    private RadzenTextBox FilterInput;
+    private IJSObjectReference SelectSets { get; set; }
+    private Dictionary<int, RadzenCheckBox<bool>> MultiSelectChecks = new Dictionary<int, RadzenCheckBox<bool>>();
+    private Dictionary<int, bool> MultiSelectChecksMarked;
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            SelectSets = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/SelectSet.razor.js");
+            await SelectSets.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+        }
+        if (jsModLoaded)
+        {
+
+        }
+
+        RefreshSetList();
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async void ToggleSelectMultiple()
+    {
+        SelectMultiple = !SelectMultiple;
+        if (!SelectMultiple)
+        {
+            await SelectSets.InvokeVoidAsync("UnMarkAllSelected", MultiSelectChecks.Select(e => e.Value.Element).ToArray());
+        }
+    }
+
+    private void ClearFilterInput()
+    {
+        FilterValue = null;
+        StateHasChanged();
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async void SetItemClicked(int setIdClicked)
+    {
+        if (!SelectMultiple)
+        {
+            if (ShowAddNew)
+            {
+                CloseWithResults(new int[] { setIdClicked });
+                return;
+            }
+
+            var setId = await VList.AddSetItemsToList(ListId, setIdClicked, await LoginUtils.GetCurrentUserApiKey());
+            CloseWithResults(new int[] {setId});
+        }
+    }
+
+    private async void AddSetsToList()
+    {
+        if (ShowAddNew)
+        {
+            CloseWithResults(MultiSelectChecksMarked?.Where(kvp => kvp.Value).ToDictionary().Select(kvp => kvp.Key).ToArray());
+            return;
+        }
+        var owner = await LoginUtils.GetCurrentUserApiKey();
+        var tasks = MultiSelectChecksMarked?.Where(kvp => kvp.Value).ToDictionary().Select(kvp => VList.AddSetItemsToList(ListId, kvp.Key, owner));
+        var list = await Task.WhenAll(tasks);
+        await Task.Delay(200);
+        
+    }
+
+    private async void ToggleFilter()
+    {
+        ShowFilter = !ShowFilter;
+        await Task.Delay(200);
+        await JS.InvokeVoidAsync("focusTargetElement", FilterInput.Element);
+    }
+
+    private void Close()
+    {
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.CloseDialog, null);
+    }
+
+    private void CloseWithResults(int[] setIds)
+    {
+        if (setIds != null)
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.ProductSetsSelected, new GlobalCallbacks.ProductSetsSelectedResponse
+            {
+                SetIds = setIds,
+                CreateNew = ShowAddNew && setIds.Contains(0)
+            });
+        }
+    }
+
+    private async Task RebuildSetList()
+    {
+        Sets = await VLists.GetSetsForUser(await LoginUtils.GetCurrentUserApiKey());
+        if (ShowAddNew)
+        {
+            Sets.Insert(0, new VList
+            {
+                Name = "Create new Set",
+                IsSet = true
+            });
+        }
+        if (MultiSelectChecksMarked == null)
+        {
+            MultiSelectChecksMarked = Sets.ToDictionary(s => s.Id, b => false);
+        }
+        if (!string.IsNullOrEmpty(FilterValue))
+        {
+            Sets = Sets.Where(s => s.Name.Contains(FilterValue, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private async void RefreshSetList()
+    {
+        await RebuildSetList();
+        StateHasChanged();
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        await RebuildSetList();
+    }
+
+    public void Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.RefreshLists:
+                RefreshSetList();
+                break;
+        }
+    }
+}

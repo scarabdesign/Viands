@@ -1,0 +1,1357 @@
+@page "/viewlist"
+
+@using Newtonsoft.Json;
+@using SQLite;
+@using Viands.Data;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using System.Diagnostics;
+@using System.Text.Json;
+@inject IJSRuntime JS;
+@inject DialogService DialogService;
+@inject ContextMenuService ContextMenuService
+@implements IDisposable;
+
+<div class="main_header_bar header_bar @(DisplayUtils.InItemEditMode ? "header_editing" : null ) device_@(DeviceInfo.Current.Platform)">
+    @if (FilterMode)
+    {
+        <div class="list_filter_view">
+            <div class="product_filter_container">
+                <button tabindex="-1"
+                    title="Close Filter" 
+                    class="close_product_filter" 
+                    @onclick=@(() => FilterMode = false)
+                />
+                <RadzenTextBox
+                    Placeholder="Product Filter"
+                    TabIndex="-1"
+                    class="product_filter"
+                    @bind-Value=@SearchTerm
+                    @oninput=@((e) => SearchTerm = e.Value.ToString())
+                    @ref=@FilterElement
+                    @onblur=@(() => {
+                        JS.InvokeVoidAsync("checkFocus");
+                    })
+                />
+                <span class="product_filter_clear_container">
+                    <div
+                        title="Clear Filter"
+                        class="product_filter_clear"
+                        @onclick=@(() => {
+                            SearchTerm = null;
+                        })
+                    />
+                </span>
+            </div>
+        </div>                        
+    }
+    else
+    {
+        <div class="list_edit_view">
+            <div class="edit_tools_right">
+                &nbsp;
+                @if(DisplayUtils.InItemEditMode)
+                {
+                    <RadzenButton Shade="Shade.Lighter" 
+                        tabindex="-1"
+                        class="listitem_quantitymode_button"
+                        title="Set quantities"
+                        ButtonStyle="ButtonStyle.Secondary" 
+                        Size="ButtonSize.Small" 
+                        Disabled=@(quatityMode || confirmMode)
+                        Click=@(args => {
+                            orderMode = false;
+                            quatityMode = true;
+                            deleteMode = false;
+                        }) >
+                        <Blazicon Svg=GoogleMaterialOutlinedIcon.Numbers />
+                    </RadzenButton>
+                    <RadzenButton Shade="Shade.Lighter" 
+                        tabindex="-1"
+                        class="listitem_ordermode_button"
+                        title="Order list items"
+                        ButtonStyle="ButtonStyle.Secondary" 
+                        Size="ButtonSize.Small" 
+                        Disabled=@(orderMode || confirmMode)
+                        Click=@(args => {
+                            orderMode = true;
+                            quatityMode = false;
+                            deleteMode = false;
+                        }) >
+                        <Blazicon Svg=MdiIcon.Sort />
+                    </RadzenButton>
+                    <RadzenButton 
+                        tabindex="-1"
+                        class="listitem_deletemode_button"
+                        title="Delete list items"
+                        Shade="Shade.Lighter" 
+                        ButtonStyle="ButtonStyle.Secondary" 
+                        Size="ButtonSize.Small"
+                        Disabled=@(deleteMode || confirmMode)
+                        Click=@(args => {
+                            orderMode = false;
+                            quatityMode = false;
+                            deleteMode = true;
+                        }) >
+                        <Blazicon Svg=Ionicon.TrashBinSharp />
+                    </RadzenButton>
+                    <RadzenButton 
+                        Shade="Shade.Lighter"
+                        tabindex="-1"
+                        class="listitem_locationoptions_button"
+                        title="Options"
+                        ButtonStyle="ButtonStyle.Secondary"
+                        Size="ButtonSize.Small"
+                        Click=@((args) => ShowListOptions(args))>
+                        <Blazicon Svg=MdiIcon.DotsVertical />
+                    </RadzenButton>
+                }
+                else if (LocationOrderMode)
+                {
+                    <span class="tool_item">
+                        <span 
+                            class="confirm_create_button"
+                            @onclick=@(() => {
+                                LocationOrderMode = false;
+                                _ = RefreshViewModel(true);
+                            })
+                            title="Confirm Locations Order">
+                            <Blazicon Svg="MdiIcon.ThumbUp" />
+                        </span>
+                    </span>
+                    <span class="tool_item">
+                        <span 
+                            class="cancel_create_button" 
+                            @onclick=@(() => {
+                                vList?.SaveListLocationOrder();
+                                _ = RefreshViewModel(true);
+                            })
+                            title="Reset Locations Order to Default">
+                            <Blazicon Svg="MdiIcon.BackupRestore" />
+                        </span>
+                    </span>
+                }
+                else
+                {
+                    <RadzenButton 
+                        Shade="Shade.Lighter"
+                        tabindex="-1"
+                        class="listitem_locationoptions_button"
+                        title="Options"
+                        ButtonStyle="ButtonStyle.Secondary"
+                        Size="ButtonSize.Small"
+                        Click=@((args) => ShowListOptions(args))>
+                        <Blazicon Svg=MdiIcon.DotsVertical />
+                    </RadzenButton>
+                }
+
+            </div>
+        </div>
+    }
+</div>
+<div class="lists_container @(DisplayUtils.InItemEditMode ? "edit_mode" : null)" style="min-width: 200px">
+    @if (vList != null)
+    {
+        var currentLocationId = -1;
+        var listItemCounter = 1;
+        var locationIds = AllItemsList.GroupBy(i => i.ProductType?.LocationId ?? 0).Select(i => i.Key).ToList();
+        foreach (var listitem in AllItemsList)
+        {
+            var makeHeader = currentLocationId != listitem.ProductType?.LocationId;
+            currentLocationId = listitem.ProductType?.LocationId ?? 0;
+            var loc = LocationsList.FirstOrDefault(l => listitem.ProductType?.LocationId == l.Id);
+            var allChecked = vList.AllCheckedForLocation(loc.Id);
+            if (makeHeader)
+            {
+                <div class="header_bar @(DisplayUtils.InItemEditMode ? "header_editing" : null )">
+                    <div class="list_edit_view">
+                        <div class="header_bar_expander_container @(LocationOrderMode ? "hide" : null)" @onclick=@(() => loc.Collapsed = !loc.Collapsed)>
+                            <div class="header_bar_expander @(loc.Collapsed ? "left" : "down")" ></div>
+                        </div>
+                        <span class="location_title @(!LocationOrderMode && allChecked ? "all_done" : null)">@listitem?.ProductType?.Location?.Name &nbsp;</span>
+                        @if (LocationOrderMode){
+                            <div class="edit_tools_right">
+                                <span class="tool_item" @onclick=@(() => {
+                                            if(locationIds.IndexOf(loc.Id) != 0) 
+                                                OrderLocation(loc.Id, -1);
+                                        }) title="Order up">
+                                    <span class="reorder_up @(locationIds.IndexOf(loc.Id) == 0 ? "invisible" : null)">
+                                        <Blazicon Svg="Ionicon.ArrowUpCircle" />
+                                    </span>
+                                </span>
+                                <span class="tool_item" @onclick=@(() => {
+                                        if(locationIds.IndexOf(loc.Id) >= locationIds.Count -1) 
+                                            return;
+                                        OrderLocation(loc.Id, 1);
+                                    }) title="Order down">
+                                    <span class="reorder_down @(locationIds.IndexOf(loc.Id) >= locationIds.Count -1 ? "invisible" : null)">
+                                        <Blazicon Svg="Ionicon.ArrowDownCircle" />
+                                    </span>
+                                </span>
+                            </div>
+                        }
+                        else if(!IsTemplate && !IsSet)
+                        {
+                            <div class="location_item_count">@loc.ItemCount Items</div>
+                            <RadzenButton 
+                                Shade="Shade.Lighter" 
+                                tabindex="-1"
+                                class="listitem_productoptions_button"
+                                title="Location Options"
+                                ButtonStyle="ButtonStyle.Secondary" 
+                                Size="ButtonSize.Small"
+                                Click=@((args) => ShowLocationOptions(args, loc.Id))>
+                                <Blazicon Svg=MdiIcon.DotsVertical />
+                            </RadzenButton>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (DisplayUtils.InItemEditMode)
+            {
+                <div class="lists_item @(lastSelected == listitem.Id ? "last_selected" : null) @(loc.Collapsed ? "hide" : null) @(LocationOrderMode ? "hide" : null)" data-listitemid="@listitem.Id">
+                    <div class="edit_tools_left">
+                        <span class="tool_item" @onclick=@(() => EditProductType(listitem.ProductTypeId, listitem.Id, listitem.Quantity)) title="Edit list item">
+                            <Blazicon Svg="MdiIcon.CircleEditOutline" class="edit_item" />
+                        </span>
+                    </div>
+                    <div class="item_name @(listitem.Id == 0 ? "new_list_item_cont" : null)">
+                        <div class="seltarget">
+                            @if (listitem.SelectedForEdit || listitem.Id == 0)
+                            {
+                                <div class="producttypeselector" data-listitemid="@listitem.Id">
+                                    @if (listitem.ProductType != null && productSelection.IndexOf(listitem.ProductType) == -1)
+                                    {
+                                        productSelection.Insert(0, listitem.ProductType);
+                                    }
+                                    @foreach (var productType in productSelection)
+                                    {
+                                        <label class="producttypeitem @(productType.Id == listitem.ProductTypeId ? "selected" : null)"
+                                               data-producttypeid=@productType.Id>
+                                            @productType.SelectorName
+                                        </label>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        @if (!IsTemplate && !IsSet){
+                            <div class="listitem_checkbox_container">
+                                <RadzenCheckBox 
+                                    TValue="bool?" 
+                                    Change=@(e => {
+                                        SelectItem(listitem.Id);
+                                        ItemWasChecked(listitem.Id, e);
+                                    })
+                                    Disabled=@((!DisplayUtils.InItemEditMode && (listitem.Checked ?? false)) || listitem.Id == 0)
+                                    TabIndex="-1"
+                                    @bind-Value="@listitem.Checked" 
+                                    title="@(DisplayUtils.InItemEditMode ? "Mark/Unmark item" : "Mark item" )"
+                                    class="listitem_checkbox"
+                                />
+                            </div>
+                        }
+                        <div class="listitem_input_container">
+                            <input value="@listitem.ProductType.TypeName"
+                                autofocus="@(listitem.Order == 0)"
+                                class="list_item_name_input @(listitem.Id == 0 ? "new_list_item" : null)"
+                                tabindex="@listItemCounter"
+                                autocomplete="off"
+                                data-listitemid=@listitem.Id
+                                data-producttypeid=@listitem.ProductTypeId
+                                data-original=@listitem.Original
+                                data-confirm="@(listitem.Confirm == true ? "true" : "false")"
+                                @ref="ListItemNameElems[listitem.Id]"
+                                @onkeydown=@((e) => {
+                                    if(e.Key == "ArrowDown" && !listitem.SelectedForEdit){
+                                        listitem.SelectedForEdit = true;
+                                    }
+                                })
+                                @onfocus=@(() => {
+                                    listitem.SelectedForEdit = true;
+                                })
+                                @onblur=@(async (e) => {
+                                    await Task.Delay(500);
+                                    if(!ListItemNameElems.ContainsKey(listitem.Id)) return;
+                                    var isCurrentlyFocused = await JS.InvokeAsync<bool>("isCurrentFocus", ListItemNameElems[listitem.Id]);
+                                    if(!isCurrentlyFocused) {
+                                        listitem.SelectedForEdit = false;
+                                    }
+                                })
+                            />
+                        </div>
+                    </div>
+                    <div class="edit_tools_right">
+                        @if (listitem.Confirm)
+                        {
+                            <span class="tool_item" >
+                                <span 
+                                    class="confirm_create_button"
+                                    @onclick=@(() => SaveCurrentValue(listitem.Id))
+                                    title="Confirm Create new Product Type"
+                                    >
+                                    <Blazicon Svg="MdiIcon.ThumbUp" />
+                                </span>
+                            </span>
+                            <span class="tool_item">
+                                <span class="cancel_create_button" @onclick=@(() => RestoreOriginal(listitem.Id, listitem))
+                                      title="Cancel Create new Product Type">
+                                    <Blazicon Svg="MdiIcon.Cancel" />
+                                </span>
+                            </span>
+                        }
+                        @if (orderMode)
+                        {
+                            <span class="tool_item" @onclick=@(() => {
+                                        if(listitem.Order != 0) 
+                                            OrderList(listitem.Id, -1);
+                                    }) title="Order up">
+                                <span class="reorder_up @(listitem.Order == 0 ? "invisible" : null)">
+                                    <Blazicon Svg="Ionicon.ArrowUpCircle" />
+                                </span>
+                            </span>
+                            <span class="tool_item" @onclick=@(() => {
+                                    if(listitem.Order >= loc.ItemCount - 1) return;
+                                    OrderList(listitem.Id, 1);
+                                }) title="Order down">
+                                <span class="reorder_down @(listitem.Order >= loc.ItemCount - 1 ? "invisible" : null)">
+                                    <Blazicon Svg="Ionicon.ArrowDownCircle" />
+                                </span>
+                            </span>
+                        }
+                        @if (deleteMode)
+                        {
+                            <span class="tool_item delete_section">
+                                <span title="@(deleteConfirm == listitem.Id ? "Confirm Delete" : "Delete Item")"
+                                    class="delete_item @(deleteConfirm == listitem.Id ? "delete_item_confirm" : null)">
+                                    <Blazicon 
+                                        Svg=@(deleteConfirm == listitem.Id ? MdiIcon.DeleteForever : MdiIcon.Delete)
+                                        class="delete_confirm_button"
+                                        @onclick=@(() => DeleteConfirm(listitem.Id)) 
+                                    />
+                                </span>
+                                <span title="Cancel Delete"
+                                    class="delete_item @(deleteConfirm == listitem.Id ? "delete_confirm" : null)">
+                                    <Blazicon 
+                                        Svg="MdiIcon.Cancel"
+                                        class="delete_cancel_button"
+                                        @onclick=@(() => DeleteCanceled()) 
+                                    />
+                                </span>
+                            </span>
+                        }
+                        @if (quatityMode)
+                        {
+                            <span class="tool_item quantity_section">
+                                x<RadzenNumeric 
+                                    TValue="int" 
+                                    Value=@listitem.Quantity 
+                                    Change=@(args => {
+                                        if(args < 1){
+                                            args = 1;
+                                        }
+                                        listitem.Quantity = args;
+                                        StoreCurrentQuantity(listitem.Id, args);
+                                    })
+                                    class="quantity_input"
+                                />
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <label class="lists_item @(lastSelected == listitem.Id ? "last_selected" : null) @(loc.Collapsed ? "hide" : null) @(LocationOrderMode ? "hide" : null)">
+                    <div class="item_name @(listitem.Id == 0 ? "new_list_item_cont" : null)">
+                        @if (listitem.ProductType?.Price != null)
+                        {
+                            <div class="listitem_price_label">
+                                <span class="list_price_label ">@listitem.ProductType.Price.DisplayPrice</span>
+                            </div>
+                        }
+                        @if (!IsTemplate && !IsSet)
+                        {
+                            <div class="listitem_checkbox_container">
+                                <RadzenCheckBox 
+                                    TValue="bool?"
+                                    Change=@(e => {
+                                        SelectItem(listitem.Id);
+                                        ItemWasChecked(listitem.Id, e);
+                                    })
+                                    Disabled=@((!DisplayUtils.InItemEditMode && (listitem.Checked ?? false)) || listitem.Id == 0)
+                                    TabIndex="-1"
+                                    @bind-Value="@listitem.Checked"
+                                    title="@(DisplayUtils.InItemEditMode ? "Mark/Unmark item" : "Mark item" )"
+                                    class="listitem_checkbox" 
+                                />
+                            </div>
+                        }
+                        <div class="listitem_label_container">
+                            <span class="list_name_area @((bool)(listitem.Checked ?? false)? "marked" : null)">
+                                @listitem.ProductType.TypeName
+                                @if (listitem.Quantity > 1)
+                                {
+                                    <i>&nbsp;(&nbsp;x@(listitem.Quantity)&nbsp;)</i>
+                                }
+                            </span>
+                            <span class="list_desc_label @((bool)(listitem.Checked ?? false)? "marked" : null)">@listitem.ProductType.Notes</span>
+                        </div>
+                    </div>
+                </label>
+            }
+            ++listItemCounter;
+        }
+        @if (AllItemsList.Count == 0)
+        {
+            if (string.IsNullOrEmpty(SearchTerm))
+            {
+                <div class="empty_list_message">There are no items in this list yet.</div>
+                <div class="empty_list_message">Tap the <Blazicon Svg=MdiIcon.PlaylistPlus /> button to get started.</div>
+            }
+            else
+            {
+                <div class="empty_list_message">There are no items matching filter "@SearchTerm".</div>
+            }
+        }
+    }
+    <div id="list_spacer" style="height:200px"></div>
+</div>
+
+@code{
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name="listid")]
+    public int ListId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name="addnew")]
+    public bool AddImmediately { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "template")]
+    public bool IsTemplate { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "productset")]
+    public bool IsSet { get; set; }
+
+    private bool jsModLoaded = false;
+    private int deleteConfirm = -1;
+    private int lastSelected = -1;
+    private bool deleteMode = false; //todo, better management of modes
+    private bool orderMode = false;
+    private bool quatityMode = true;
+    private bool confirmMode = false;
+    private List<string> UndoHistory = new List<string>();
+    private Dictionary<int, ElementReference> ListItemNameElems = new Dictionary<int, ElementReference>();
+    private RadzenTextBox FilterElement;
+    private List<VProductType> productSelection = new List<VProductType>();
+    private List<VLocation> LocationsList = new List<VLocation>();
+    private VList vList { get; set; }
+    private IJSObjectReference ViewListsJS { get; set; }
+    private List<VListItem> AllItemsList { get; set; }
+    private bool ProductTypeEditorOpening = false;
+    private bool LocationOrderMode { get; set; } = false;
+    private bool _FilterMode;
+    private bool FilterMode
+    {
+        get
+        {
+            return _FilterMode;
+        }
+        set
+        {
+            _FilterMode = value;
+            SearchTerm = null;
+        }
+    }
+
+    private string _SearchTerm;
+    private string SearchTerm
+    {
+        get
+        {
+            return _SearchTerm;
+        }
+        set
+        {
+            _SearchTerm = value;
+            RebuildItemsList();
+            StateHasChanged();
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        await RefreshViewModel(true);
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    protected async override Task OnParametersSetAsync()
+    {
+        if (vList != null)
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, (IsTemplate ? "[Template] " : IsSet ? "[Set] " : null) + vList.Name);
+        }
+        await base.OnParametersSetAsync();
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            ViewListsJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/ViewList.razor.js");
+            await ViewListsJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+        }
+        if (jsModLoaded)
+        {
+            if (!ProductTypeEditorOpening)
+                await ViewListsJS.InvokeVoidAsync("InitViewList");
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task RefreshViewModel(bool saveUndo, bool changeState = true)
+    {
+        await FetchVMData();
+        if (saveUndo)
+        {
+            AddToUndoHistory();
+        }
+        if (changeState)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private Stopwatch stopWatch;
+    private void StartTimer()
+    {
+        stopWatch = new Stopwatch();
+        stopWatch.Start();
+    }
+
+    private void StopTimer()
+    {
+        if (stopWatch == null) return;
+        stopWatch.Stop();
+        TimeSpan ts = stopWatch.Elapsed;
+        string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+            ts.Hours, ts.Minutes, ts.Seconds,
+            ts.Milliseconds / 10);
+
+        Debug.WriteLine("!!!!!!!!!!! RunTime " + elapsedTime);
+    }
+
+    private async Task FetchVMData()
+    {
+        var locList = await VLocation.GetAllLocationsForLists(ListId);
+        locList.ForEach(l => l.Collapsed = LocationsList?.FirstOrDefault(lo => lo.Id == l.Id)?.Collapsed ?? false);
+        LocationsList = locList;
+        await RebuildViewModel();
+        RebuildItemsList();
+        await RefreshSelector();
+        if (AddImmediately)
+        {
+            AddImmediately = false;
+            AddNewListItem();
+        }
+    }
+
+    private async Task RebuildViewModel(bool saveUndo = false)
+    {
+        vList = await Data.ViewModels.VList.Init(ListId, await LoginUtils.GetCurrentUserApiKey());
+        if (saveUndo)
+        {
+            AddToUndoHistory();
+        }
+    }
+
+    private void RebuildItemsList()
+    {
+        if (string.IsNullOrEmpty(SearchTerm))
+        {
+            AllItemsList = vList?.GetSortedList(DisplayUtils.InItemEditMode, LocationOrderMode) ?? new List<VListItem>();
+        }
+        else
+        {
+            AllItemsList = vList?.GetSortedList(DisplayUtils.InItemEditMode, false).Where(li => (bool)(li.ProductType?.TypeName?.ToLower().Contains(SearchTerm.ToLower()) ?? false)).ToList();
+        }
+    }
+
+    private void AddToUndoHistory()
+    {
+        if (vList == null) return;
+        var data = JsonConvert.SerializeObject(vList);
+        var current = UndoHistory.ElementAtOrDefault(HistoryPointer);
+        if (UndoHistory.Count == 0 || current == null)
+        {
+            UndoHistory.Add(data);
+            ++HistoryPointer;
+        }
+        else if (current != null && data != current)
+        {
+            UndoHistory.Add(data);
+            ++HistoryPointer;
+        }
+
+        if (HistoryPointer > 0 && UndoHistory.Count > 0 && UndoHistory.Count > HistoryPointer + 1)
+        {
+            var removeCount = (UndoHistory.Count - (HistoryPointer + 1));
+            UndoHistory.RemoveRange(HistoryPointer, removeCount);
+        }
+    }
+
+    private int HistoryPointer = -1;
+    private async void Undo()
+    {
+        if (vList == null || UndoHistory.Count < 2) return;
+        var prev = UndoHistory.ElementAtOrDefault(HistoryPointer - 1);
+        if(prev != null)
+        {
+            --HistoryPointer;
+            var vlist = JsonConvert.DeserializeObject<VList>(prev);
+            await VLists.SaveLists(new List<VList>() { vlist });
+            await VList.ClearItemsForList(vlist.Id);
+            await VList.ImportListItems(vlist.VListItems);
+            await RefreshViewModel(false, false);
+            await AutoCollapse();
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable("StoreCurrentQuantityJS")]
+    public void StoreCurrentQuantityJS(string JSONResult)
+    {
+        ProductMatchRequest req = System.Text.Json.JsonSerializer.Deserialize<ProductMatchRequest>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        var listitemid = req.ListItemId;
+        var currentVal = req.CurrentVal;
+        if (string.IsNullOrEmpty(currentVal) || listitemid == 0)
+        {
+            return;
+        }
+
+        var quatity = int.Parse(currentVal);
+        if (quatity == 0)
+        {
+            quatity = 1;
+        }
+
+        StoreCurrentQuantity(listitemid, quatity);
+    }
+
+    private Dictionary<int, CancellationTokenSource> CancelStoreQuantity = new Dictionary<int, CancellationTokenSource>();
+    private async void StoreCurrentQuantity(int listitemid, int quantity)
+    {
+        if (listitemid > 0 && quantity > 0)
+        {
+            try
+            {
+                if (CancelStoreQuantity.ContainsKey(listitemid))
+                {
+                    CancelStoreQuantity[listitemid]?.Cancel();
+                    CancelStoreQuantity.Remove(listitemid);
+                }
+
+                CancelStoreQuantity.Add(listitemid, new CancellationTokenSource());
+                await Task.Delay(1000, CancelStoreQuantity[listitemid].Token);
+
+                await VListItem.SetListItemQuantity(listitemid, quantity);
+                StateHasChanged();
+
+                if (CancelStoreQuantity.ContainsKey(listitemid))
+                {
+                    CancelStoreQuantity.Remove(listitemid);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private void ShowListOptions(MouseEventArgs args)
+    {
+        var optList = new List<ContextMenuItem>();
+        if (IsTemplate)
+        {
+            optList.Add(new ContextMenuItem() { Text = "Filter", Value = 2, Icon = "search" });
+            optList.Add(new ContextMenuItem() { Text = "Reorder Locations", Value = 3, Icon = "import_export" });
+            optList.Add(new ContextMenuItem() { Text = "New List from Template", Value = 5 });
+        }
+        else if (IsSet)
+        {
+            optList.Add(new ContextMenuItem() { Text = "Filter", Value = 2, Icon = "search" });
+        }
+        else
+        {
+            optList = new List<ContextMenuItem> {
+                new ContextMenuItem(){ Text = "Undo", Value = 6, Icon = "undo" },
+                new ContextMenuItem(){ Text = "Filter", Value = 2, Icon = "search" },
+                new ContextMenuItem(){ Text = "Mark All", Value = 1, Icon = "task_alt" },
+                new ContextMenuItem(){ Text = "Unmark All", Value = 0, Icon = "radio_button_unchecked" },
+                new ContextMenuItem(){ Text = "Reorder Locations", Value = 3, Icon = "import_export"  },
+                new ContextMenuItem(){ Text = "Scan Barcode", Value = 7, Image = "/icons/barcode.svg" },
+                new ContextMenuItem(){ Text = "Save List as Template", Value = 4 },
+            };
+        }
+
+        ContextMenuService.Open(args, optList, (a) => {
+            switch ((int)a.Value)
+            {
+                case 0:
+                case 1:
+                    _ = SaveDemarcations((int)a.Value);
+                    break;
+                case 2:
+                    ShowProductFilter();
+                    break;
+                case 3:
+                    TurnOffLocationOrderMode();
+                    break;
+                case 4:
+                    NavTools.NavigateTo(NavTools.VPageTypes.EditList, "listid=" + ListId + "&template=true&copy=true");
+                    break;
+                case 5:
+                    NavTools.NavigateTo(NavTools.VPageTypes.EditList, "listid=" + ListId + "&fromtemplate=true");
+                    break;
+                case 6:
+                    Undo();
+                    break;
+                case 7:
+                    GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RequestLineItemForUPC, new GlobalCallbacks.EditProductTypeResponse
+                    {
+                        ListId = ListId
+                    });
+                    break;
+            }
+            ContextMenuService.Close();
+        });
+    }
+
+    private async void TurnOffLocationOrderMode()
+    {
+        await ForceExitItemEdit();
+        LocationOrderMode = true;
+        _ = RefreshViewModel(false);
+    }
+
+    private void ShowLocationOptions(MouseEventArgs args, int locationid)
+    {
+        var loc = LocationsList.FirstOrDefault(l => locationid == l.Id);
+        ContextMenuService.Open(args,
+            new List<ContextMenuItem> {
+                new ContextMenuItem(){ Text = "Mark All" + (locationid == 0 ? null : " At " + (loc.Name ?? "(Unknown)")), Value = 1, Icon = "task_alt" },
+                new ContextMenuItem(){ Text = "Unmark All" + (locationid == 0 ? null : " At " + (loc.Name ?? "(Unknown)")), Value = 0, Icon = "radio_button_unchecked" },
+                }, (a) => {
+                    if (loc != null)
+                        loc.Collapsed = false;
+                    _ = SaveDemarcationsAtLocation(locationid, (int)a.Value);
+                    ContextMenuService.Close();
+                }
+        );
+    }
+
+    private async void ShowProductFilter()
+    {
+        FilterMode = true;
+        StateHasChanged();
+        await Task.Delay(500);
+        await JS.InvokeVoidAsync("focusTargetElement", FilterElement.Element);
+    }
+
+    private void SaveCurrentValue(int id)
+    {
+        ViewListsJS.InvokeVoidAsync("SaveCurrentValue", ListItemNameElems[id]);
+    }
+
+    private async Task RestoreOriginal(int listitemid, VListItem listitem)
+    {
+        if (ListItemNameElems.ContainsKey(listitemid)){
+            var input = ListItemNameElems[listitemid];
+            await ViewListsJS.InvokeVoidAsync("RestoreOriginal", input);
+        }
+
+        listitem.Confirm = false;
+        deleteMode = false;
+        quatityMode = true;
+        orderMode = false;
+        confirmMode = false;
+        FilterEmpty();
+    }
+
+    private async void RestoreAll()
+    {
+        var revertList = vList?.VListItems?.Select(async listitem =>
+        {
+            var exists = ListItemNameElems.ContainsKey(listitem.Id);
+            if(!exists)
+            {
+                return;
+            }
+            await RestoreOriginal(listitem.Id, listitem);
+        });
+
+        await Task.WhenAll(revertList);
+    }
+
+    private async Task FocusTargetElem(ElementReference input)
+    {
+        await JS.InvokeVoidAsync("focusTargetElement", input);
+    }
+
+    private void EditProductType(int producttypeid, int listitemid, int quantity)
+    {
+        var targ = AllItemsList.FirstOrDefault(l => l.Id == listitemid);
+        var index = AllItemsList.IndexOf(targ);
+        var isLast = index >= AllItemsList.Count - 1;
+        var isFirst = producttypeid == 0 || index == 0;
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditProductType, new GlobalCallbacks.EditProductTypeResponse
+        {
+            ProductTypeId = producttypeid,
+            ListItemId = listitemid,
+            Quantity = quantity,
+            ListId = ListId,
+            IsFirst = isFirst,
+            IsLast = isLast
+        });
+    }
+
+    private VListItem GetNextPrevListItem(int listitemid, int prevNext)
+    {
+        var targ = AllItemsList.FirstOrDefault(l => l.Id == listitemid);
+        var index = AllItemsList.IndexOf(targ);
+        var nextIndex = index + prevNext;
+        if (nextIndex < 0)
+        {
+            nextIndex = 0;
+        }
+        if (nextIndex > AllItemsList.Count - 1)
+        {
+            nextIndex = AllItemsList.Count - 1;
+        }
+        return AllItemsList[nextIndex];
+    }
+
+    private void EditPrevNextProductType(int producttypeid, int listitemid, bool nextPrev)
+    {
+        var li = GetNextPrevListItem(listitemid, nextPrev ? 1 : -1);
+        if (li != null)
+            EditProductType(li.ProductTypeId, li.Id, li.Quantity);
+    }
+
+    private async void ItemWasChecked(int listitemid, bool? isChecked)
+    {
+        await SaveDemarcation(listitemid, isChecked == null ? -1 : (bool)isChecked ? 1 : 0);
+    }
+
+    private CancellationTokenSource CancelShiftMarked;
+    private async Task SaveDemarcation(int listitemid, int demarcation)
+    {
+        if (listitemid == 0) return;
+        var li = await ListItems.GetListItem(listitemid);
+        li.demarcation = demarcation;
+        await ListItems.UpsertListItem(li);
+        await RebuildViewModel(true);
+        if (DisplayUtils.InListEditMode)
+            return;
+        try{
+            if (CancelShiftMarked != null)
+            {
+                CancelShiftMarked.Cancel(false);
+            }
+            CancelShiftMarked = new CancellationTokenSource();
+            await Task.Delay(1000, CancelShiftMarked.Token);
+            await RefreshViewModel(false, false);
+            await AutoCollapse();
+            StateHasChanged();
+        } catch{}
+    }
+
+    private async Task SaveDemarcations(int demarcation)
+    {
+        await VListItem.MarkUnmarkListItems(ListId, demarcation);
+        await RefreshViewModel(true, false);
+        await AutoCollapse();
+        StateHasChanged();
+    }
+
+    private async Task SaveDemarcationsAtLocation(int locationid, int demarcation)
+    {
+        await VListItem.MarkUnmarkListItemsForLocation(ListId, locationid, demarcation);
+        await RefreshViewModel(true, false);
+        await AutoCollapse();
+        StateHasChanged();
+    }
+
+    private async Task AutoCollapse()
+    {
+        var locIds = LocationsList.Select(l => l.Id).ToList();
+        var tasks = locIds.Select(async lid =>
+        {
+            var allMarked = await VList.AllMarkedForLocation(ListId, lid);
+            return new Tuple<int, bool>(lid, allMarked);
+        });
+        var res = await Task.WhenAll(tasks);
+        var results = res.ToList();
+        var collated = results.GroupBy(cr => cr.Item1).ToDictionary(cr => cr.Key, cr => cr.Where(r => r.Item1 == cr.Key).All(r => r.Item2));
+
+        LocationsList.ForEach(lo =>
+        {
+            var shouldCollapse = collated.ContainsKey(lo.Id) ? collated[lo.Id] : false;
+            lo.Collapsed = lo.Collapsed || shouldCollapse;
+        });
+    }
+
+    [JSInvokable("FilterEmpty")]
+    public void FilterEmpty()
+    {
+        vList?.FilterEmpty();
+        RebuildItemsList();
+        StateHasChanged();
+    }
+
+    public async Task ForceItemEditMode()
+    {
+        if (!DisplayUtils.InItemEditMode)
+        {
+            DisplayUtils.ToggleEditItemsMode();
+            NavTools.RunToolSetFor(IsTemplate ? NavTools.ToolSetTypes.EditTemplateItems : IsSet ? NavTools.ToolSetTypes.EditProductSetItems : NavTools.ToolSetTypes.EditItems);
+            await Task.Delay(300);
+        }
+    }
+
+    public async Task ForceExitItemEdit()
+    {
+        if (DisplayUtils.InItemEditMode)
+        {
+            DisplayUtils.ExitEditModes();
+            NavTools.RunToolSetFor(IsTemplate ? NavTools.ToolSetTypes.ViewTemplate : IsSet ? NavTools.ToolSetTypes.ViewProductSet : NavTools.ToolSetTypes.ViewList);
+            await Task.Delay(300);
+        }
+    }
+
+    [JSInvokable("AddNewListItem")]
+    public async void AddNewListItem()
+    {
+        if(vList == null)
+        {
+            await Task.Delay(1000);
+            if (vList == null) return;
+        }
+        await ForceItemEditMode();
+        var listItem = vList.AddBlankListItem(vList.Id);
+        RebuildItemsList();
+        StateHasChanged();
+        await Task.Delay(500);
+        await JS.InvokeVoidAsync("focusNewInput");
+    }
+
+    [JSInvokable("AssignProductType")]
+    public async Task AssignProductType(string JSONResult)
+    {
+        ProductAssignmentRequest req = System.Text.Json.JsonSerializer.Deserialize<ProductAssignmentRequest>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        var producttypeid = req.ProductTypeId;
+        if (producttypeid == 0) return;
+
+        var listitemid = req.ListItemId;
+        await SaveProductTypeForListItem(listitemid, producttypeid);
+    }
+
+    [JSInvokable("PrepConfirm")]
+    public void PrepConfirm(string JSONResult)
+    {
+        ProductMatchRequest req = System.Text.Json.JsonSerializer.Deserialize<ProductMatchRequest>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        var listitemid = req.ListItemId;
+        var currentVal = req.CurrentVal;
+        if (string.IsNullOrEmpty(currentVal))
+        {
+            return;
+        }
+
+        var listitem = vList.VListItems.FirstOrDefault(li => li.Id == listitemid);
+        if (listitem != null && listitem.ProductType?.TypeName != currentVal)
+        {
+            listitem.Confirm = true;
+            deleteMode = false;
+            quatityMode = false;
+            orderMode = false;
+            confirmMode = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveProductTypeForListItem(int listitemid, int producttypeid)
+    {
+        var _listitemid = await VList.AddUpdateListItem(ListId, listitemid, producttypeid);
+        await Task.Delay(100);
+        _ = RefreshViewModel(true);
+        SelectItem(_listitemid);
+    }
+
+    [JSInvokable("CheckProductTypeMatch")]
+    public async Task CheckProductTypeMatch(string JSONResult)
+    {
+        ProductMatchRequest req = System.Text.Json.JsonSerializer.Deserialize<ProductMatchRequest>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        var listitemid = req.ListItemId;
+        if (listitemid == 0)
+        {
+            var listItem = vList?.VListItems?.FirstOrDefault(i => i.Id == listitemid);
+            if (listItem != null)
+                listItem.Confirm = true;
+            deleteMode = false;
+            quatityMode = false;
+            orderMode = false;
+            confirmMode = true;
+            return;
+        }
+
+        var currentVal = req.CurrentVal;
+        if (string.IsNullOrEmpty(currentVal))
+        {
+            return;
+        }
+
+        await CheckProductTypeMatch(currentVal, listitemid);
+    }
+
+    public async Task CheckProductTypeMatch(string currentValue, int listitemid)
+    {
+        if (string.IsNullOrEmpty(currentValue)) return;
+        var listItem = vList?.VListItems?.FirstOrDefault(i => i.Id == listitemid);
+        if (listItem != null && listItem.ProductTypeId > 0 && listItem.ProductType != null)
+        {
+            var producttype = await ProductTypes.GetProductType(listItem.ProductTypeId);
+            if (producttype.typename != currentValue)
+            {
+                listItem.Confirm = true;
+                deleteMode = false;
+                orderMode = false;
+                confirmMode = true;
+                quatityMode = false;
+                UnAssignProductType(listitemid, currentValue);
+                await Task.Delay(100);
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void UnAssignProductType(int listitemid, string newTitle)
+    {
+        var listItem = vList?.VListItems?.FirstOrDefault(i => i.Id == listitemid);
+        listItem.UnLoadProductType();
+        if (!string.IsNullOrEmpty(newTitle))
+        {
+            listItem.ProductType.TypeName = newTitle;
+        }
+    }
+
+    [JSInvokable("SaveNewProductType")]
+    public async Task SaveNewProductType(string JSONResult)
+    {
+        ProductMatchRequest req = null;
+        try{
+            req = System.Text.Json.JsonSerializer.Deserialize<ProductMatchRequest>(JSONResult, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                IncludeFields = true
+            });
+        }
+        catch (Exception e)
+        {
+            Debug.WriteLine(e);
+        }
+
+        if (req == null || string.IsNullOrEmpty(req.CurrentVal)) return;
+        await SaveNewProductType(req.ListItemId, req.CurrentVal);
+    }
+
+    public async Task SaveNewProductType(int listitemid, string currentVal)
+    {
+        var listItem = vList?.VListItems?.FirstOrDefault(i => i.Id == listitemid);
+        if (listItem.ProductTypeId == 0)
+        {
+            var newProductType = new v_producttypes
+            {
+                typename = currentVal
+            };
+            var producttypeid = await ProductTypes.UpsertProductType(newProductType);
+            await SaveProductTypeForListItem(listItem.Id, producttypeid);
+            await RefreshViewModel(true);
+            await RefreshSelector();
+        }
+        listItem.Confirm = false;
+        deleteMode = false;
+        orderMode = false;
+        confirmMode = false;
+        quatityMode = true;
+    }
+
+    private CancellationTokenSource CancelSelectItem;
+    private async void SelectItem(int listItemId)
+    {
+        lastSelected = listItemId;
+        StateHasChanged();
+        if (CancelSelectItem != null)
+        {
+            CancelSelectItem.Cancel(false);
+        }
+        CancelSelectItem = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(1300, CancelSelectItem.Token);
+            //await JS.InvokeAsync<string>("removeLastSelected", null);
+            lastSelected = -1;
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private void DeleteCanceled()
+    {
+        deleteConfirm = -1;
+    }
+
+    private async Task DeleteConfirm(int itemid)
+    {
+        if (deleteConfirm == itemid)
+        {
+            await DeleteListItem(itemid);
+            deleteConfirm = -1;
+            return;
+        }
+        deleteConfirm = itemid;
+    }
+
+    private async Task DeleteListItem(int itemid)
+    {
+        var listitem = await ListItems.GetListItem(itemid);
+        await ListItems.DeleteListItem(listitem);
+        _ = RefreshViewModel(true);
+    }
+
+    public async Task RefreshSelector()
+    {
+        productSelection = await VProductType.GetUniqueProductTypeList(ListId);
+    }
+
+    private async void OrderLocation(int locationid, int upDn)
+    {
+        var listLocationOrder = vList.GetListLocationOrder();
+        if(listLocationOrder == null)
+        {
+            await vList.SaveListLocationOrder();
+            listLocationOrder = vList.GetListLocationOrder();
+            if (listLocationOrder == null)
+            {
+                return;
+            }
+        }
+        var targInd = listLocationOrder.IndexOf(locationid);
+        if (targInd < 0)
+        {
+            targInd = 0;
+        }
+        if(targInd > listLocationOrder.Count - 1)
+        {
+            targInd = listLocationOrder.Count - 1;
+        }
+
+        var nextInd = targInd + upDn;
+        if(nextInd < 0)
+        {
+            nextInd = 0;
+        }
+        if (nextInd > listLocationOrder.Count - 1)
+        {
+            nextInd = listLocationOrder.Count - 1;
+        }
+
+        listLocationOrder.Reverse(Math.Min(targInd, nextInd), 2);
+        var listLocationOrderString = JsonConvert.SerializeObject(listLocationOrder, Formatting.None);
+        await vList.SaveListMetaForKey(Support.ListMeta.ListLocationOrder, listLocationOrderString);
+        _ = RefreshViewModel(true);
+    }
+
+    private async void OrderList(int listitemid, int upDn)
+    {
+        SelectItem(listitemid);
+        var targ = vList?.VListItems?.FirstOrDefault(l => l.Id == listitemid);
+        var next = vList?.VListItems?.FirstOrDefault(l => l.Order == targ.Order + upDn && (l.ProductType?.LocationId ?? 0) == (targ.ProductType?.LocationId ?? 0));
+        var oldOrder = targ.Order;
+        targ.Order = next.Order;
+        next.Order = oldOrder;
+        await VList.SaveListItems(vList?.VListItems);
+        _ = RefreshViewModel(true);
+    }
+
+    async void IDisposable.Dispose()
+    {
+        deleteConfirm = -1;
+        lastSelected = -1;
+        FilterEmpty();
+        await JS.InvokeVoidAsync("tearDownGCBForNS", "ViewList");
+        DisplayUtils.ExitEditModes();
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private async void AddLineItemFromUPC(GlobalCallbacks.EditProductTypeResponse response)
+    {
+        if (response == null) return;
+        if (response.UPC == null) return;
+
+        async Task _finalize(int listitemid, int ms){
+            await RefreshViewModel(true);
+            SelectItem(listitemid);
+            await Task.Delay(ms);
+            await JS.InvokeVoidAsync("scrollToLastSelected");
+        }
+
+        var existingListItem = await VListItem.GetListItemByUPC(ListId, response.UPC);
+        if (existingListItem != null)
+        {
+            await VListItem.AdjustListItemQuantity(existingListItem.Id, 1);
+            await _finalize(existingListItem.Id, 500);
+            return;
+        }
+
+        var productTypes = await VProductType.GetProductTypesByUPC(response.UPC);
+        if (productTypes != null && productTypes.Count > 0)
+        {
+            var listitemid = await VList.AddUpdateListItem(ListId, 0, productTypes[0].Id);
+            await _finalize(existingListItem.Id, 700);
+            return;
+        }
+
+        var fetchedProductInfo = await VProduct.GetProductByUPC(response.UPC, 0, false);
+        if(fetchedProductInfo == null)
+        {
+            Debug.WriteLine("UPC Fetch failed");
+            await RefreshViewModel(true);
+            return;
+        }
+
+        var productTypeInfo = await VProductType.Init(0);
+        productTypeInfo.TypeName = fetchedProductInfo.FetchedName;
+        productTypeInfo.Product = fetchedProductInfo ?? new VProduct();
+        productTypeInfo.ProductId = await VProduct.SaveProduct(productTypeInfo.Product);
+        productTypeInfo.Price = new VPrice();
+        productTypeInfo.PriceId = await VPrice.SavePrice(productTypeInfo.Price);
+
+        if(fetchedProductInfo.FetchedSize != null)
+        {
+            productTypeInfo.Price.ProductSize = fetchedProductInfo.FetchedSize;
+        }
+
+        productTypeInfo.Id = await VProductType.SaveProductType(productTypeInfo);
+
+        var listitem = vList.AddBlankListItem(ListId);
+        listitem.ProductTypeId = productTypeInfo.Id;
+        listitem.ProductType = productTypeInfo;
+        listitem.Quantity = 1;
+
+        var newlistitems = await VList.SaveListItems(new List<VListItem>
+        {
+            listitem
+        });
+
+        if(newlistitems.Count > 0)
+        {
+            await _finalize(newlistitems[0], 700);
+        }
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.AddListItem:                
+                LocationOrderMode = false;
+                AddNewListItem();
+                break;
+            case GlobalCallbacks.CBKeys.EditItemsModeToggled:
+                var onOff = (bool)args;
+                FilterMode = false;
+                if (!onOff)
+                {
+                    RestoreAll();
+                }
+                else
+                {
+                    LocationOrderMode = false;
+                }
+                NavTools.RunToolSetFor(IsTemplate ? NavTools.ToolSetTypes.EditTemplateItems : IsSet ? NavTools.ToolSetTypes.EditProductSetItems : NavTools.ToolSetTypes.EditItems);
+                GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, (IsTemplate ? "[Template] " : IsSet ? "[Set] " : null) + vList.Name + (onOff ? " [Editing]" : null));
+                _ = RefreshViewModel(false);
+                break;
+            case GlobalCallbacks.CBKeys.EditItemsModeExited:
+                RestoreAll();
+                break;
+            case GlobalCallbacks.CBKeys.EditProductType:
+                ProductTypeEditorOpening = true;
+                ViewListsJS.InvokeVoidAsync("EnableDisableTabIndices", false);
+                break;
+            case GlobalCallbacks.CBKeys.DialogClosed:
+                ViewListsJS.InvokeVoidAsync("EnableDisableTabIndices", true);
+                ProductTypeEditorOpening = false;
+                break;
+            case GlobalCallbacks.CBKeys.RefreshLists:
+                _ = RefreshViewModel(false);
+                break;
+            case GlobalCallbacks.CBKeys.EditNextProductType:
+                var editNext = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (editNext != null)
+                {
+                    EditPrevNextProductType(editNext.ProductTypeId, editNext.ListItemId, true);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.EditPrevProductType:
+                var editPrev = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (editPrev != null)
+                {
+                    EditPrevNextProductType(editPrev.ProductTypeId, editPrev.ListItemId, false);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.SelectProductSets:
+                GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.OpenSelectProductSets, new SelectSetRequest
+                {
+                    ListId = ListId
+                });
+                break;
+            case GlobalCallbacks.CBKeys.ResponseLineItemForUPC:
+                AddLineItemFromUPC(args as GlobalCallbacks.EditProductTypeResponse);
+                break;
+        }
+    }
+}

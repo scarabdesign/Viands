@@ -1,0 +1,107 @@
+
+TODO:
+    - server site products api
+        - add new field to products table
+            - local meta type, 
+                - stores products matching UPC that were put into viands databases
+                - need to get info from mobile sources
+                    - would this be a syncing action?
+                        - when button in settings pressed
+                        - or if connected to wifi, automatically?
+                        - only owners of each can change?
+                    - pull info from backups?
+                        - assumes there's backups
+                            - maybe auto backups?
+                - also should have management interface to do manual editing
+    - menu editor
+        - fix pasting
+        - adding sets 
+            - numbered order of add in selector
+    - put in toast for common things
+        - after scanning barcode
+        - after menu items saved
+    - deal with duplicate barcodes
+        - they should be allowed
+        - local lookups are only grabbing the first result
+    - save debug logs
+    - leverage navigation (Android only?)
+        - customize stack
+        - hitting back should exit edit mode
+    - secure it
+        - password
+        - email registration/verification
+    - fix owner_id scheme 
+    - make backups namable
+    - add database versioning
+        - show different import options for older versions
+    - drag/drop list items to order
+        - might be hard because of webview bug
+    - save active page to reload where you left off
+        - important?
+    - impliment redo
+        - in list view
+        - in menu editor
+    - graphics
+        - fix ios not updating icons or splash
+        - fix android splash backdrop color
+    - do more with price
+        - comparing
+    - all value entry validation
+        - editing product type
+        - editing location
+    - flesh out app settings
+        - option for disabling rotation 
+            - will need to be platform specific
+        - fix themes
+            - dark theme at least
+        - choose primary?
+        - change highlight color
+        - change default header color
+        - text options
+            - bold
+            - colors
+            - finer grained font size
+                - like ios, have normal and super slider
+                - perhaps 2 slider
+                    - top is fine grain
+                    - bottom increments by 100s
+                - show preview lable 
+                    - don't resize everything until saved
+                - put in collapible panel
+    - componentize things
+        - lists (!)
+    - list options
+            - settable color for location
+            - numbered/lettered lines
+            - sub items?
+            - separated lists per location
+        - demarcation options
+            - regular check
+            - 3 way check
+            - color changer?
+            - strikethrough
+            - click row or just checkbox
+        - sorting options
+            - every list? 
+	        - ...then by (x3?)
+            - by custom int
+            - by dates
+            - by name
+            - by location
+            - by price
+            - auto seperate marked items bottom of list or leave in same order
+
+Possible changes:
+    - Add normal and sale price
+        - sale should have a time aspect
+    - Better deal with same products with differing locations
+        - does location belong on listitems?
+        - or are there a list of loctions for an item
+            - listitems can point to another location in list
+            - each location/product type should be associated with a price entry
+                - instead of one to one with location/product type/price (as it is)
+                - these can get defaults from UPC lookup
+
+Research:
+    - Think about distribution
+        - both app and server components

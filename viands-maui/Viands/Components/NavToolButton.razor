@@ -1,0 +1,126 @@
+﻿@using System.Diagnostics
+@using static Viands.Support.NavTools
+
+@if (NavTool != null)
+{
+    var classes = (new List<string>()
+    {
+        "nav-link",
+        "sidebar-link",
+        NavTool.highlight,
+        NavTool.hidden ? "hidden" : null,
+        NavTool.showback ? "back_displayed" : null,
+        NavTool.small ? "small_button" : null,
+        NavTool.editorButton ? "editor_button" : null,
+        NavTool.disabled ? "disabled": null,
+        NavTool.className
+    }).Where(c => !string.IsNullOrEmpty(c));
+
+    <a 
+        @onclick=@ToolClicked
+        @onmousedown=@MouseDown
+        @onmouseup=@MouseUp
+        id="@NavToolId" 
+        class=@string.Join(" ", classes)
+        href="@NavTool.href"
+        title="@NavTool.tip"
+        tabindex="-1"
+        disabled=@(NavTool.disabled || this.Disabled)
+    >
+        @if (NavTool.hasTimer)
+        {
+            <span class="counter navpie navpie_@NavTool.GetHashCode() @(TimerStarted ? "animate_pie" : "hide")"></span>
+        }
+        <Blazicon Svg=NavTool.icon />
+    </a>
+    @if (!NavTool.suppressTitle)
+    {
+        string top = "", textlftrt = "", arrowlftrt = "", arrowHeight = "";
+        if (NavTool.titleArrows[0] > 0 || NavTool.titleArrows[1] > 0)
+        {
+            top = "top:" + NavTool.titleArrows[0] + "px;";
+            textlftrt = (NavTool.right ? "right" : "left") + ":" + NavTool.titleArrows[1] + "px;";
+            arrowlftrt = (NavTool.right ? "right" : "left") + ":" + NavTool.titleArrows[2] + "px;";
+            arrowHeight = "border-bottom-width:" + NavTool.titleArrows[3] + "px;";
+        }
+        <style>
+            .titles_showing #@(NavToolId)::after {
+                content: "@NavTool.tip.Trim()";
+                @top
+                @textlftrt
+            }
+            .titles_showing #@(NavToolId)::before {
+                content: " ";
+                @arrowlftrt
+                @arrowHeight
+            }
+        </style>
+    }
+    @if (NavTool.hasTimer)
+    {
+        <style>
+            .navpie.navpie_@NavTool.GetHashCode() {
+                --t: @(TimerTimeout)ms;
+            }
+            .animate_pie.navpie_@NavTool.GetHashCode() {
+                animation: p var(--t) 0.5s reverse both;
+            }
+        </style>
+    }
+}
+
+
+@code {
+
+    [Parameter]
+    public NavTool NavTool { get; set; }
+
+    public string NavToolId => "nt_" + GetHashCode();
+
+    public int TimerTimeout => NavTool?.timeOut ?? 5000;
+
+    private bool TimerStarted = false;
+
+    private bool Disabled = false;
+
+    protected void MouseDown(MouseEventArgs args)
+    {
+        if (NavTool == null || NavTool.onholdDown == null) return;
+
+        NavTool.onholdDown?.Invoke();
+    }
+
+    protected void MouseUp(MouseEventArgs args)
+    {
+        if (NavTool == null || NavTool.onholdDown == null) return;
+
+
+        NavTool.onholdUp?.Invoke();
+    }
+
+    protected async void ToolClicked(MouseEventArgs args)
+    {
+        if (Disabled) return;
+        if (NavTool == null) return;
+        if (NavTool.onclick != null)
+        {
+            NavTool.onclick.Invoke(args);
+        }
+        if (NavTool.onclickAsync != null)
+        {
+            _ = NavTool.onclickAsync?.Invoke(args);
+        }
+
+        if (NavTool.hasTimer)
+        {
+            TimerStarted = true;
+            Disabled = true;
+            StateHasChanged();
+            await Task.Delay(TimerTimeout);
+            Disabled = false;
+            TimerStarted = false;
+            StateHasChanged();
+        }
+
+    }
+}

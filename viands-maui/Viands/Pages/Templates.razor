@@ -1,0 +1,228 @@
+@page "/templates"
+
+@using System.Diagnostics;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using Viands.Data;
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@implements IDisposable
+
+<div class="lists_container @EditModeClass">
+    @if (this.TemplatesList.Count > 0)
+    {
+        @foreach (var list in this.TemplatesList)
+        {
+            <div class="lists_item @(lastSelected == list.Id ? "last_selected" : null)" @ref="ListElements[list.Order]">
+                <div class="edit_tools_left">
+                    <span class="tool_item" @onclick=@(() => EditTemplate(list.Id)) title="Edit list item">
+                        <Blazicon Svg="MdiIcon.CircleEditOutline" class="edit_item" />
+                    </span>
+                </div>
+                <div id="lin_@list.Id" class="list_name" @onclick="@(() => TemplateItemClicked(list.Id))">
+                    <label class="list_name_label">@list.Name</label>
+                    <label class="list_desc_label">@list.Description</label>
+                </div>
+                <div class="edit_tools_right">
+                    <span class="tool_item" @onclick=@(() => OrderTemplate(list.Id, -1)) title="Order up">
+                        <span class="reorder_up @FirstInList(list.Order)">
+                            <Blazicon Svg="Ionicon.ArrowUpCircle" />
+                        </span>
+                    </span>
+                    <span class="tool_item" @onclick=@(() => OrderTemplate(list.Id, 1)) title="Order down">
+                        <span class="reorder_down @LastInList(list.Order)">
+                            <Blazicon Svg="Ionicon.ArrowDownCircle" />
+                        </span>
+                    </span>
+                    <span class="tool_item delete_section">
+                        <span class="delete_item">
+                            <Blazicon 
+                                Svg="MdiIcon.DeleteForever"
+                                class="delete_confirm_button"
+                                title="Delete List"
+                                @onclick=@(() => DeleteTemplate(ListElements[list.Order], list.Id, list.Name)) 
+                            />
+                        </span>
+                    </span>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="empty_list_message">There are no templates yet.</div>
+        <div class="empty_list_message">Tap the <Blazicon Svg=MdiIcon.PlusCircleOutline /> button to get started.</div>
+    }
+    <div id="list_spacer" style="height:200px"></div>
+</div>
+
+@code
+{
+    private int lastSelected = -1;
+    private bool jsModLoaded = false;
+    private IJSObjectReference TemplatesJS { get; set; }
+    private List<VList> TemplatesList = new List<VList>();
+    private string EditModeClass => DisplayUtils.InListEditMode ? "edit_mode" : null;
+    private Dictionary<int, ElementReference> ListElements = new Dictionary<int, ElementReference>();
+
+    private string SelectFade(int id)
+    {
+        if (id == lastSelected)
+        {
+            return "last_selected";
+        }
+        return null;
+    }
+
+    private string FirstInList(int order)
+    {
+        return order == 0 ? "invisible" : null;
+    }
+    private string LastInList(int order)
+    {
+        return order == TemplatesList.Count - 1 ? "invisible" : null;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshLists:
+                RefreshLists();
+                break;
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.AddTemplate:
+            case GlobalCallbacks.CBKeys.EditTemplate:
+                EditTemplate((int)args);
+                break;
+            case GlobalCallbacks.CBKeys.ViewTemplateItems:
+                ViewTemplateItems((int)args);
+                break;
+            case GlobalCallbacks.CBKeys.EditListModeToggled:
+                NavTools.RunToolSetFor(NavTools.ToolSetTypes.EditTemplates);
+                NavTools.ShowHideBackArrow(NavTools.ToolTypes.ManageData, true);
+                break;
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        RefreshLists();
+        await base.OnInitializedAsync();
+    }
+
+    void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            TemplatesJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Templates.razor.js");
+            await TemplatesJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+        }
+
+        resetLastSelected();
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        resetLastSelected();
+    }
+
+    private void EditTemplate(int listId)
+    {
+        NavTools.NavigateTo(NavTools.VPageTypes.EditList, "listid=" + listId + "&template=true");
+    }
+
+    private void ViewTemplateItems(int listId)
+    {
+        NavTools.NavigateTo(NavTools.VPageTypes.ViewTemplate, "listid=" + listId + "&template=true");
+    }
+
+    private void TemplateItemClicked(int listId)
+    {
+        if (DisplayUtils.InListEditMode)
+        {
+            return;
+        }
+
+        ViewTemplateItems(listId);
+    }
+
+    private async void resetLastSelected()
+    {
+        await Task.Delay(300);
+        await JS.InvokeAsync<string>("removeLastSelected", null);
+    }
+
+    protected override void OnParametersSet()
+    {
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, "Manage Templates");
+        base.OnParametersSet();
+    }
+
+    private async void RefreshLists()
+    {
+        TemplatesList = await VLists.GetTemplatesForUser(await LoginUtils.GetCurrentUserApiKey());
+        StateHasChanged();
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async void DeleteTemplate(ElementReference listCont, int listId, string name)
+    {
+        await TemplatesJS.InvokeAsync<string>("FadeListItem", listCont, false);
+        var delete = await DialogService.Confirm(
+            "Delete template \"" + name + "\"?", "Confirm",
+            new ConfirmOptions()
+            {
+                CssClass = "confirm_delete_list",
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            }
+        ) ?? false;
+        if (delete)
+        {
+            await Lists.DeleteList(await Lists.GetList(listId, await LoginUtils.GetCurrentUserApiKey()));
+            await TemplatesJS.InvokeAsync<string>("Unfade", listCont);
+            RefreshLists();
+            return;
+        }
+        await TemplatesJS.InvokeAsync<string>("Unfade", listCont);
+    }
+
+    private async void OrderTemplate(int listId, int upDn)
+    {
+        lastSelected = listId;
+        var ind = TemplatesList.FindIndex(l => l.Id == listId);
+        if (ind == -1) return;
+        if (ind == 0 && upDn == -1) return;
+        if (ind == TemplatesList.Count() - 1 && upDn == 1) return;
+        var targ = TemplatesList[ind];
+        var next = TemplatesList[ind + upDn];
+        var oldOrder = targ.Order;
+        targ.Order = next.Order;
+        next.Order = oldOrder;
+        await VLists.SaveLists(new List<VList> { targ, next });
+        RefreshLists();
+    }
+
+    public async static Task ReorderTemplateItems(List<VList> list)
+    {
+        var index = 0;
+        list.ForEach(item => item.Order = index++);
+        await VLists.SaveLists(list);
+    }
+}

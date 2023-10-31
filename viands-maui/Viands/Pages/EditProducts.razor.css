@@ -1,0 +1,217 @@
+
+.header_bar {
+    min-height: 34px;
+    background-color: #65597d;
+    margin-bottom: 2px;
+    line-height: 32px;
+    color: white;
+    white-space: nowrap;
+}
+
+::deep .product_filter_container {
+    display: flex;
+    padding: 5px 5px 0 5px;
+    flex-grow: 8;
+}
+
+::deep .product_filter {
+    height: 26px;
+    flex-grow: 16;
+    font-weight: bold;
+    border-radius: 15px;
+    margin-left: 5px;
+}
+
+::deep .product_filter_clear:active {
+    scale: 95%;
+}
+
+::deep .products_options_button {
+    display: block;
+    background-color: #9ACD32 !important;
+    color: white !important;
+    border-radius: 20px;
+    padding: 0;
+}
+
+::deep .products_options_button svg {
+    font-size: 20px;
+}
+
+::deep .product_options_container,
+::deep .product_filter_clear_container {
+    flex-grow: 1;
+    margin-left: 5px;
+}
+
+::deep .product_filter_clear {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAAAn0lEQVR42u3UMQrDMBBEUZ9WfQqDmm22EaTyjRMHAlM5K+Y7lb0wnUZPIKHlnutOa+25Z4D++MRBX98MD1V/trSppLKHqj9TTBWKcoUqffbUcbBBEhTjBOV4ja4l4OIAZThEOV6jHO8ARXD+gPPvKMABinGOrnu6gTNUawrcQKNCAQ7QeTxORzle3+sDfjJpPCqhJh7GixZq4rHcc9l5A9qZ+WeBhgEuAAAAAElFTkSuQmCC);
+    background-repeat: no-repeat;
+    height: 25px;
+    width: 25px !important;
+    border: 1px solid black;
+    border-radius: 15px;
+    background-size: 18px;
+    background-position: center;
+    background-color: #aaa;
+    filter: invert();
+    background-blend-mode: color-burn;
+}
+
+.header_flex {
+    display: flex;
+}
+
+.lists_container {
+    padding: 0.2rem;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    height: 100vh;
+}
+
+.lists_container::-webkit-scrollbar {
+    background: transparent;
+    width: 8px;
+}
+
+.lists_container::-webkit-scrollbar-thumb {
+    background: #999;
+    border-radius: 5px;
+}
+
+.lists_item:has(.tool_item:active .reorder_down:not(.invisible)),
+.lists_item:has(.tool_item:active .reorder_up:not(.invisible)),
+.lists_item:has(.tool_item:active .reorder_down:not(.invisible)) .tool_item,
+.lists_item:has(.tool_item:active .reorder_up:not(.invisible)) .tool_item {
+    background: #9ACD32;
+}
+
+.lists_item:has(.delete_item:active) .tool_item,
+.lists_item:has(.delete_item:active) {
+    background: pink;
+}
+
+::deep .delete_item .delete_cancel_button {
+    display: none;
+}
+
+::deep .delete_item.delete_confirm .delete_cancel_button {
+    display: initial;
+}
+
+::deep .tool_item.delete_section {
+    text-align: left;
+    padding-left: 10px;
+    width: 70px;
+}
+
+::deep .delete_item.delete_item_confirm,
+::deep .delete_item.delete_confirm {
+    color: #ff00007f;
+}
+
+.lists_item:active .edit_tools_right,
+.lists_item:active .tool_item,
+.lists_item:active {
+    background-color: #ebebeb
+}
+
+.lists_item.fade {
+    transition: background-color 100ms linear, opacity 500ms linear;
+}
+
+.lists_item.fade.out {
+    opacity: 0;
+}
+
+.lists_item.fade.in {
+    opacity: 1;
+}
+
+.lists_item.hide {
+    display: none;
+}
+
+.lists_item {
+    background-color: white;
+    margin-bottom: 1px;
+    cursor: pointer;
+    font-weight: bold;
+    color: #444;
+    white-space: nowrap;
+    height: 34px;
+}
+
+.tool_item.hide {
+    display: none;
+}
+
+.tool_item {
+    font-size: 1.5em;
+    line-height: 1em;
+    text-align: center;
+    background-color: white;
+    display: block;
+}
+
+.item_name {
+    display: inline-block;
+}
+
+::deep .item_name_label_input {
+    display: flex;
+    padding: 0.3rem 0.5rem;
+    width: 100%;
+    cursor: pointer !important;
+    float: left;
+}
+
+.list_name_area {
+    margin-left: 5px;
+}
+
+::deep .list_name_area {
+    flex-grow: 5;
+}
+
+::deep .list_desc_label {
+    flex-grow: 5;
+    text-align: right;
+    color: lightgray;
+    margin-left: 10px;
+}
+
+.edit_tools_right .tool_item {
+    border-left: 1px solid lightgray;
+}
+
+.edit_tools_right {
+    width: 70px;
+    float: right;
+    height: 34px;
+    padding: 5px 0;
+    z-index: 1;
+    position: relative;
+    background-color: white;
+}
+
+.edit_tools_left .tool_item {
+    border-left: none;
+    border-right: 1px solid lightgray;
+}
+
+.edit_tools_left {
+    width: 70px;
+    float: left;
+    height: 34px;
+    padding: 5px 0;
+}
+
+@media (max-width: 640.98px) {
+    .edit_tools_left {
+        width: 40px;
+    }
+    .edit_tools_right .tool_item {
+        width: 40px;
+    }
+}

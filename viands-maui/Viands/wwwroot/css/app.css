@@ -1,0 +1,529 @@
+﻿@import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
+@import url('open-iconic/font/css/satoshi.css');
+@import url('open-iconic/font/css/MaterialSymbols.css');
+
+html {
+    overflow: hidden;
+    scroll-behavior: auto !important;
+}
+html::-webkit-scrollbar {
+    display: none;
+}
+
+.rz-notification-message {
+    position: fixed !important;
+    bottom: 20px !important;
+    top: unset !important;
+    left: 40% !important;
+}
+
+@media (max-width: 640.98px) {
+    .rz-notification-message {
+        left: 20% !important;
+    }
+}
+
+.status-bar-safe-area {
+    background-color: white !important;
+}
+
+.editproducttype_modal {
+    margin-top: env(safe-area-inset-top);
+}
+
+.selectset_modal {
+    min-height: 300px !important;
+    max-height: 500px !important;
+}
+
+.rz-tooltip .rz-menu {
+    text-align: right;
+}
+
+body {
+    background-color: lightgray !important;
+}
+
+.error_message.error_on_top {
+    bottom: unset !important;
+    top: -10px;
+}
+
+.error_message {
+    position: absolute;
+    right: 30px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    bottom: -10px;
+    background-color: white;
+    padding: 0 5px;
+}
+
+::selection {
+    color: white;
+    background-color: #9ACD32;
+}
+
+.lists_container {
+    overscroll-behavior: contain;
+}
+
+html, body {
+    font-family: 'Satoshi-Variable','Helvetica Neue', Helvetica, Arial, sans-serif;
+    user-select: none;
+}
+
+
+[dirty]::after,
+setelementtitle[data-setid="0"]::after,
+productelement[data-productid="0"]::after,
+productelement[data-newtoset="true"]::after {
+    user-select: none;
+    content: "*";
+    font-size: 13px;
+    line-height: 0px;
+    margin-right: 5px;
+    vertical-align: middle;
+    font-size: 20px;
+}
+
+[dirty]::after,
+setelementtitle[data-setid="0"]::after,
+productelement[data-productid="0"]::after {
+    color: red !important;
+}
+
+productelement[data-newtoset="true"]::after {
+    color: #6693ff;
+}
+
+setelement {
+    background-color: rgba(93,191,116,0.16);
+    padding: 0px 5px;
+    display: block;
+    line-height: 2rem;
+    border-radius: 2px;
+    margin-bottom: 5px;
+}
+
+setelementtitle::before {
+    content: ":";
+    float: right;
+    margin-right: -8px;
+    font-size: 1.2rem;
+    line-height: 1.3rem;
+}
+
+setelementtitle {
+    background-color: #c9d9ff;
+    color: #333;
+    font-weight: bold;
+    margin-right: 10px;
+    white-space: nowrap;
+    display: inline-block;
+    line-height: 1.4rem;
+    border-radius: 2px;
+    font-size: 1.1rem;
+}
+
+productelement[data-liid] {
+    background-color: #fbffd8;
+}
+
+setelement > productelement {
+    background-color: #ffffff;
+}
+
+productelement {
+    background-color: rgba(93,191,116,0.16);
+    margin-right: 5px;
+    display: inline-block;
+    line-height: 1.4rem;
+    border-radius: 2px;
+}
+
+.rz-html-editor-separator:nth-last-of-type(4) {
+    margin-left: auto;
+}
+
+.list_desc .menu_editor_label.unsaved:after {
+    content: "*";
+    color: red;
+    position: absolute;
+    font-size: 25px;
+    margin-top: 4px;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.list_desc .rz-html-editor-toolbar {
+    position: relative;
+}
+
+.list_desc .menu_editor_label {
+    right: auto;
+    top: -0.8rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    transform: translate(0, 0);
+    color: var(--rz-input-placeholder-color);
+    background-color: var(--rz-form-field-label-floating-background-color);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    max-width: calc(100% - 1.5rem);
+}
+
+.mso {
+    font-family: 'MSO';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px; /* Preferred icon size */
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    /* Support for all WebKit browsers. */
+    -webkit-font-smoothing: antialiased;
+    /* Support for Safari and Chrome. */
+    text-rendering: optimizeLegibility;
+    /* Support for Firefox. */
+    -moz-osx-font-smoothing: grayscale;
+    /* Support for IE. */
+    font-feature-settings: 'liga';
+}
+
+.msr {
+    font-family: 'MSR';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px; /* Preferred icon size */
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    /* Support for all WebKit browsers. */
+    -webkit-font-smoothing: antialiased;
+    /* Support for Safari and Chrome. */
+    text-rendering: optimizeLegibility;
+    /* Support for Firefox. */
+    -moz-osx-font-smoothing: grayscale;
+    /* Support for IE. */
+    font-feature-settings: 'liga';
+}
+
+.mss {
+    font-family: 'MSS';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px; /* Preferred icon size */
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    /* Support for all WebKit browsers. */
+    -webkit-font-smoothing: antialiased;
+    /* Support for Safari and Chrome. */
+    text-rendering: optimizeLegibility;
+    /* Support for Firefox. */
+    -moz-osx-font-smoothing: grayscale;
+    /* Support for IE. */
+    font-feature-settings: 'liga';
+}
+
+.mir {
+    font-family: 'MIR';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px; /* Preferred icon size */
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+    /* Support for all WebKit browsers. */
+    -webkit-font-smoothing: antialiased;
+    /* Support for Safari and Chrome. */
+    text-rendering: optimizeLegibility;
+    /* Support for Firefox. */
+    -moz-osx-font-smoothing: grayscale;
+    /* Support for IE. */
+    font-feature-settings: 'liga';
+}
+
+.no-scroll {
+    padding-right: 0 !important;
+}
+
+.embeded_dialog {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.rz-textbox.short {
+    display: inline-block !important;
+    width: 25% !important;
+}
+
+.nav-link {
+    color: #333 !important;
+}
+
+.nav-link.disabled {
+    color: darkgray !important;
+}
+
+.editproducttype_modal input[data-isZero='true'] {
+    color: transparent;
+}
+
+.editproducttype_modal input[data-isZero='true']:active,
+.editproducttype_modal input[data-isZero='true']:focus {
+    color: var(--rz-input-value-color);
+}
+
+.hide {
+    display: none !important;
+}
+
+.inset_page {
+    background-color: white;
+    border-radius: 5px;
+    margin: 1rem 2rem 0 0;
+    padding: 1rem 2rem;
+    max-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.inset_page .list_desc {
+    min-height: 400px;
+}
+
+.empty_list_message {
+    font-style: italic;
+    text-align: center;
+    color: gray;
+}
+
+@media (max-width: 640.98px) {
+    .inset_page {
+        margin: 0;
+        padding: 10px;
+    }
+}
+
+.confirm_delete_list .rz-dialog-content {
+    padding: 10px !important;
+}
+
+.rz-chkbox {
+    scale: 1.2 !important;
+    margin-bottom: 0.2px;
+}
+
+.rz-chkbox-box {
+    border-radius: 0.6rem !important;
+    border-width: 0.1px !important;
+}
+
+.item_name_label {
+    display: block;
+}
+
+.dialog_footer button {
+    margin: 0 0.5em;
+}
+
+.dialog_footer {
+    position: absolute;
+    bottom: 0;
+    margin-bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+}
+
+.dialog_bottom_buttons{
+    display: flex;
+    justify-content: end;
+}
+
+.addlist_modal {
+    top: 2rem;
+    bottom: 2rem;
+    left: 2rem;
+    right: 2rem;
+    width: auto !important;
+    max-width: unset !important;
+}
+
+@media (max-width: 340.98px) {
+    .settings_modal, .addlist_modal {
+        left: 0;
+        right: 0;
+        margin: 0 !important;
+    }
+}
+
+h1:focus {
+    outline: none;
+}
+
+a, .btn-link {
+    color: #0071c1;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: #1b6ec2;
+    border-color: #1861ac;
+}
+
+.content {
+    padding-top: 1.1rem;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid red;
+}
+
+.validation-message {
+    color: red;
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred."
+}
+
+.status-bar-safe-area {
+    display: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+    .status-bar-safe-area {
+        display: flex;
+        position: sticky;
+        top: 0;
+        height: env(safe-area-inset-top);
+        background-color: #f7f7f7;
+        width: 100%;
+        z-index: 1;
+    }
+
+    .flex-column, .navbar-brand {
+        padding-left: env(safe-area-inset-left);
+    }
+}
+
+.sidebar-link[disabled] {
+    opacity: 0.4;
+}
+
+.producttype_buttons .sidebar-link {
+    display: inline-block;
+    pointer-events: auto;
+    padding: 0 0.1rem;
+}
+
+.producttype_buttons .sidebar-link svg {
+    font-size: 2.2rem;
+}
+
+img.rz-navigation-item-icon {
+    filter: contrast(0.2);
+}
+
+/*
+    https://www.freecodecamp.org/news/css-only-pie-chart/
+*/
+.navpie,
+.pie {
+    --w: 20px;
+    --t: 5s;
+    --p: 100;
+    --c: #002f00;
+    --b: 3px;
+    width: var(--w);
+    aspect-ratio: 1;
+    position: absolute;
+    font-size: 25px;
+    font-weight: bold;
+    font-family: sans-serif;
+}
+
+.navpie:before,
+.pie:before {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    inset: 0;
+    background: conic-gradient(var(--c) calc(var(--p)*1%),#0000 0);
+    -webkit-mask: radial-gradient(farthest-side,#0000 calc(99% - var(--b)),#000 calc(100% - var(--b)));
+    mask: radial-gradient(farthest-side,#0000 calc(99% - var(--b)),#000 calc(100% - var(--b)));
+}
+
+.navpie {
+    right: 27%;
+    top: 27%;
+    --w: 30px;
+    --b: 5px;
+}
+
+.navpie:before {
+    --c: #9ACD32;
+}
+
+@property --p {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1;
+}
+
+@keyframes p {
+    from {
+        --p: 0
+    }
+}
+
+.animate_pie {
+    animation: p var(--t) 0.5s reverse both;
+}

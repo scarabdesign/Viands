@@ -1,0 +1,194 @@
+
+.edit_location_multirow {
+    display: flex;
+    justify-content: space-between;
+    width: 99%;
+}
+
+::deep .edit_location_multirow_left {
+    flex-grow: 2;
+    margin-right: 10px;
+}
+
+::deep .edit_location_multirow_right {
+    flex-grow: 1;
+}
+
+::deep .edit_location_multirow_right input {
+    max-width: 100px;
+}
+
+.editlocation_modal {
+    position: relative;
+}
+
+.joined_buttons {
+    background-color: #e1e1e1;
+    display: inline-block;
+    border-radius: 20px;
+    margin: 0 5px;
+}
+
+.joined_buttons a {
+    padding: 0 !important;
+}
+
+.location_buttons .sidebar-link ::deep svg {
+    font-size: 2.2rem;
+}
+
+.location_buttons {
+    position: absolute;
+    z-index: 10;
+    right: 12px;
+    top: 2px;
+    left: 2px;
+    display: flex;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 30%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.location_buttons .editor_button {
+    position: relative;
+}
+
+.location_buttons.titles_showing ::deep .editor_button::before {
+    display: block;
+    position: absolute;
+    height: 0px;
+    width: 0px;
+    background-color: transparent;
+    top: 70%;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom-style: solid;
+    border-bottom-color: #999;
+    pointer-events: none;
+}
+
+::deep .editor_button::after {
+    position: absolute;
+    font-weight: bold;
+    text-align: center;
+    display: block;
+    color: white;
+    background-color: #999;
+    border-radius: 10px;
+    padding: 5px 0;
+    max-width: 60px;
+    line-height: 15px;
+    font-size: 14px;
+    pointer-events: none;
+    white-space: normal;
+}
+
+.location_buttons ::deep .small_button {
+    scale: 50%;
+}
+
+.location_buttons_right {
+    pointer-events: auto
+}
+
+.editlocation_modal h5 {
+    margin-left: 45px;
+    margin-top: 25px;
+}
+
+.location_buttons ::deep .sidebar-link {
+    display: inline-block;
+    pointer-events: auto;
+}
+
+.inline-link {
+    margin-top: 3px;
+}
+
+::deep .sidebar-link.savable svg,
+.inline-link ::deep svg,
+::deep .sidebar-link.highlight_green svg {
+    background-color: #9ACD32;
+    color: white;
+}
+
+::deep .editor_button {
+    padding: 0 !important;
+}
+
+.inline-link,
+::deep .sidebar-link {
+    cursor: pointer;
+    padding: 0.1rem 0.2rem;
+    transition: opacity 300ms linear;
+}
+
+.inline-link.hidden,
+::deep .sidebar-link.hidden {
+    opacity: 0;
+    position: absolute;
+    pointer-events: none;
+    z-index: 90;
+}
+
+.inline-link:active svg,
+.sidebar-link:active svg,
+::deep .sidebar-link:active svg {
+    scale: 0.95;
+}
+
+.inline-link ::deep svg,
+.sidebar-link svg,
+::deep .sidebar-link svg {
+    font-size: 2rem;
+    border-radius: 2rem;
+    display: inline-block;
+}
+
+.location_buttons ::deep svg {
+    background-color: #e1e1e1;
+    color: inherit;
+}
+
+.location_size,
+.location_price {
+    text-align: right !important;
+    font-family: monospace;
+    font-size: 30px;
+    outline: none;
+}
+
+.location_price_container::before {
+    content: "$";
+    position: absolute;
+    font-size: 26px;
+    font-weight: bold;
+    color: gray;
+    margin-left: 11px;
+}
+
+.location_onsale_container {
+    margin: 14px 0 0 0;
+}
+
+.location_size_container ::deep input {
+    -moz-appearance: textfield;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background-color: transparent;
+    line-height: var(--rz-numeric-line-height);
+    text-align: inherit;
+    padding: var(--rz-numeric-input-padding);
+    outline: none;
+}
+
+.location_location_container {
+    min-width: 240px;
+}
+
+::deep .rz-multiselect, ::deep .rz-dropdown {
+    display: inherit !important;
+    border: none !important;
+}

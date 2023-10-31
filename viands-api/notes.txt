@@ -1,0 +1,10 @@
+* To start public page
+    systemctl --user start viands@1
+* Get status
+    systemctl --user status viands@1
+* Reload daemon after changes
+    systemctl --user daemon-reload
+
+* To add another service
+    vim ~/.config/systemd/user/name@1.service
+    systemctl --user enable name@1

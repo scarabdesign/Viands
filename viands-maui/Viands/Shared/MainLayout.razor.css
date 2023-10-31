@@ -1,0 +1,112 @@
+
+.title_bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.title_bar > title_text {
+    font-size: 1.2rem;
+    line-height: 2rem;
+}
+
+.title_text {
+    font-weight: bold;
+}
+
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+    background-color: lightgray;
+}
+
+main .content {
+    padding: 0px !important;
+    background-color: lightgray;
+}
+
+.sidebar {
+    background-image: linear-gradient(-90deg, #f3f3f3 0%, lightgray 70%);
+}
+
+.top-row {
+    background-image: linear-gradient(0deg, #f3f3f3 0%, lightgray 70%);
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+}
+
+.top-row ::deep a, .top-row ::deep .btn-link {
+    white-space: nowrap;
+    margin-left: 1.5rem;
+    text-decoration: none;
+}
+
+.top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+    text-decoration: underline;
+}
+
+.top-row ::deep a:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+::deep .error_message {
+    position: absolute;
+    right: 10px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    bottom: -10px;
+    background-color: white;
+    padding: 0 5px;
+}
+
+.selectset_modal ::deep .rz-dialog-content {
+    padding: 20px 10px;
+}
+
+/* Tools on top */
+@media (max-width: 640.98px) {
+
+    .sidebar {
+        background-image: linear-gradient(0deg, #f3f3f3 0%, lightgray 70%);
+    }
+
+    .top-row:not(.auth) {
+        display: none;
+    }
+}
+
+/* Tools on side bar */
+@media (min-width: 641px) {
+    .page {
+        flex-direction: row;
+    }
+
+    .sidebar {
+        width: 100px;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+        min-height: 350px;
+    }
+
+    .top-row {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .top-row {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}

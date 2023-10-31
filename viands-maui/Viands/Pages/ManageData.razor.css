@@ -1,0 +1,61 @@
+
+.inline-link ::deep svg {
+    background-color: #9ACD32;
+    color: white;
+}
+
+.inline-link {
+    cursor: pointer;
+    margin-top: 3px;
+    transition: opacity 300ms linear;
+}
+
+.inline-link.hidden {
+    opacity: 0;
+    position: absolute;
+    pointer-events: none;
+    z-index: 90;
+}
+
+.inline-link ::deep svg {
+    font-size: 3rem;
+    border-radius: 2rem;
+    padding: 6px;
+    display: inline-block;
+}
+
+.inline-link:active ::deep svg,
+.inline-link ::deep svg:active {
+    scale: 95%;
+}
+
+.inline-link ::deep label {
+    color: black;
+    font-weight: bold;
+    line-height: 50px;
+    vertical-align: top;
+}
+
+.management_page .rz-card {
+    padding: 10px !important;
+}
+
+.management_page .inline-link {
+    border-radius: 30px;
+    background-color: #f1f1f1;
+    text-decoration: none;
+    align-self: flex-start;
+    padding-right: 1rem;
+}
+
+.management_page .inline-link label {
+    cursor: pointer;
+}
+
+.management_page {
+    padding: 10px !important;
+}
+
+.management_page ::deep .rz-card {
+    padding: 10px !important;
+}

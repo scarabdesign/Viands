@@ -1,0 +1,312 @@
+﻿@page "/editproducts"
+
+@using SQLite;
+@using Viands.Data;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using System.Diagnostics;
+@using System.Text.Json;
+@inject IJSRuntime JS;
+@inject DialogService DialogService;
+@inject ContextMenuService ContextMenuService
+@implements IDisposable;
+
+<div class="header_bar @(DisplayUtils.InItemEditMode ? "header_editing" : null )">
+    <div class="header_flex">
+        <div class="product_filter_container">
+            <RadzenTextBox 
+                Placeholder="Product Filter" 
+                class="product_filter" 
+                @ref=@FilterInput
+                @bind-Value=@SearchTerm
+                @oninput=@((e) => SearchTerm = e.Value.ToString())
+                @onblur=@(() => {
+                    JS.InvokeVoidAsync("checkFocus");
+                })
+            />
+            <span class="product_filter_clear_container">
+                <button 
+                    class="product_filter_clear" 
+                    @onclick=@ClearFilter />
+            </span>
+            <span class="product_options_container">
+                <RadzenButton 
+                    Shade="Shade.Lighter"
+                    class="products_options_button"
+                    title="Options"
+                    ButtonStyle="ButtonStyle.Secondary"
+                    Size="ButtonSize.Small"
+                    Click=@ShowListOptions >
+                    <Blazicon Svg=MdiIcon.DotsVertical />
+                </RadzenButton>
+            </span>
+        </div>
+    </div>
+</div>
+<div class="lists_container" style="min-width: 200px">
+    @if (vProductTypeList != null)
+    {
+        foreach (var producttypeitem in vProductTypeList)
+        {
+            <div class="lists_item">
+                <div class="edit_tools_left">
+                    <span class="tool_item" @onclick=@(() => AddEditProductType(producttypeitem.Id)) title="Edit Product Type">
+                        <Blazicon Svg="MdiIcon.CircleEditOutline" class="edit_item" />
+                    </span>
+                </div>
+                <div class="edit_tools_right">
+                    <span class="tool_item delete_section">
+                        <span title="@(deleteConfirm == producttypeitem.Id ? "Confirm Delete" : "Delete Item")"
+                            class="delete_item @(deleteConfirm == producttypeitem.Id ? "delete_item_confirm" : null)">
+                            <Blazicon 
+                                Svg=@(deleteConfirm == producttypeitem.Id ? MdiIcon.DeleteForever : MdiIcon.Delete)
+                                class="delete_confirm_button"
+                                @onclick=@(() => DeleteConfirm(producttypeitem.Id)) 
+                            />
+                        </span>
+                        <span title="Cancel Delete"
+                            class="delete_item @(deleteConfirm == producttypeitem.Id ? "delete_confirm" : null)">
+                            <Blazicon 
+                                Svg="MdiIcon.Cancel"
+                                class="delete_cancel_button"
+                                @onclick=@(() => DeleteCanceled()) 
+                            />
+                        </span>
+                    </span>
+                </div>
+                <div class="item_name">
+                    <RadzenLabel class="item_name_label_input">
+                        <span class="list_name_area">@producttypeitem.TypeName</span>
+                        <span class="list_desc_label">@producttypeitem.DetailsPreview</span>
+                    </RadzenLabel>
+                </div>
+            </div>
+        }
+        @if (vProductTypeList.Count == 0)
+        {
+            if (string.IsNullOrEmpty(SearchTerm))
+            {
+                <div class="empty_list_message">There are no items in this list yet.</div>
+                <div class="empty_list_message">Tap the <Blazicon Svg=MdiIcon.PlusCircleOutline /> button to get started.</div>
+            }
+            else
+            {
+                <div class="empty_list_message">There are no items matching the filter "@SearchTerm".</div>
+            }
+        }
+    }
+    <div id="list_spacer" style="height:200px"></div>
+</div>
+
+
+@code {
+
+    private bool jsModLoaded = false;
+    private int deleteConfirm = -1;
+    private RadzenTextBox FilterInput;
+    private IJSObjectReference EditProductsJS { get; set; }
+    private List<VProductType> vProductTypeList { get; set; } = new List<VProductType>();
+    public Support.Constants.SortTypes CurrentSort { get; set; } = Support.Constants.SortTypes.Product;
+    public int CurrentSortDirection { get; set; } = 1;
+    private string _SearchTerm;
+    private string SearchTerm { 
+        get
+        {
+            return _SearchTerm;
+        }
+        set
+        {
+            _SearchTerm = value;
+            _ = RefreshLists();
+        }
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            EditProductsJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/EditProducts.razor.js");
+            await EditProductsJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, "Edit Products");
+        }
+        if (jsModLoaded)
+        {
+
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task RefreshLists()
+    {
+        vProductTypeList = string.IsNullOrEmpty(SearchTerm) ?
+            await VProductType.GetProductTypeList(CurrentSort, CurrentSortDirection) :
+            await VProductType.FilterProductTypes(SearchTerm, CurrentSort, CurrentSortDirection);
+
+        StateHasChanged();
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async Task ClearFilter()
+    {
+        SearchTerm = null;
+        await JS.InvokeVoidAsync("focusTargetElement", FilterInput.Element);
+    }
+
+    private void DeleteCanceled()
+    {
+        deleteConfirm = -1;
+    }
+
+    private async Task DeleteConfirm(int itemid)
+    {
+        if (deleteConfirm == itemid)
+        {
+            await DeleteProductType(itemid);
+            deleteConfirm = -1;
+            return;
+        }
+        deleteConfirm = itemid;
+    }
+
+    private void ShowListOptions(MouseEventArgs args)
+    {
+        ContextMenuService.Open(args,
+            new List<ContextMenuItem> {
+                new ContextMenuItem(){ Text = "Sort...", Value = 0, Icon = "import_export" }
+            }, (a) => {
+                switch ((int)a.Value)
+                {
+                    case 0:
+                        SortBy(args);
+                        return;
+                }
+
+                ContextMenuService.Close();
+            }
+        );
+    }
+
+    private void SortBy(MouseEventArgs args)
+    {
+        string getIcon(Support.Constants.SortTypes sortType)
+        {
+            if(sortType == CurrentSort)
+            {
+                return CurrentSortDirection == 1 ? "arrow_drop_up" : "arrow_drop_down";
+            }
+
+            return null;
+        }
+
+        ContextMenuService.Open(args,
+            new List<ContextMenuItem> {
+                new ContextMenuItem(){ Text = "Sort by Product", Value = 0, Icon = getIcon(Support.Constants.SortTypes.Product)},
+                new ContextMenuItem(){ Text = "Sort by Price", Value = 1, Icon = getIcon(Support.Constants.SortTypes.Price)},
+                new ContextMenuItem(){ Text = "Sort by Location", Value = 2, Icon = getIcon(Support.Constants.SortTypes.Location)}
+            }, (a) => {
+                switch ((int)a.Value)
+                {
+                    case 0:
+                        CurrentSortDirection = CurrentSort == Support.Constants.SortTypes.Product ? (CurrentSortDirection * -1) : 1;
+                        CurrentSort = Support.Constants.SortTypes.Product;
+                        break;
+                    case 1:
+                        CurrentSortDirection = CurrentSort == Support.Constants.SortTypes.Price ? (CurrentSortDirection * -1) : 1;
+                        CurrentSort = Support.Constants.SortTypes.Price;
+                        break;
+                    case 2:
+                        CurrentSortDirection = CurrentSort == Support.Constants.SortTypes.Location ? (CurrentSortDirection * -1) : 1;
+                        CurrentSort = Support.Constants.SortTypes.Location;
+                        break;
+                }
+                _ = RefreshLists();
+                ContextMenuService.Close();
+            }
+        );
+    }
+
+    private async Task DeleteProductType(int itemid)
+    {
+        await VProductType.DeleteProductType(itemid);
+        await RefreshLists();
+    }
+
+    private void AddEditProductType(int producttypeid)
+    {
+        var index = vProductTypeList.IndexOf(vProductTypeList.FirstOrDefault(pt => pt.Id == producttypeid));
+        var isLast = index >= vProductTypeList.Count - 1;
+        var isFirst = producttypeid == 0 || index == 0;
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditProductType, new GlobalCallbacks.EditProductTypeResponse
+        {
+            ProductTypeId = producttypeid,
+            IsFirst = isFirst,
+            IsLast = isLast
+        });
+    }
+
+    private void EditPrevNextProductType(int producttypeid, bool nextPrev)
+    {
+        var index = vProductTypeList.IndexOf(vProductTypeList.FirstOrDefault(pt => pt.Id == producttypeid));
+        var newIndex = index + (nextPrev ? 1 : -1);
+        if (newIndex >= vProductTypeList.Count - 1)
+        {
+            newIndex = vProductTypeList.Count - 1;
+        }
+        if (newIndex < 0)
+        {
+            newIndex = 0;
+        }
+        var nextProdType = vProductTypeList.ElementAtOrDefault(newIndex);
+        if (nextProdType != null)
+        {
+            AddEditProductType(nextProdType.Id);
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        deleteConfirm = -1;
+        await RefreshLists();
+    }
+
+    public void Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.RefreshLists:
+                _ = RefreshLists();
+                break;
+            case GlobalCallbacks.CBKeys.EditNextProductType:
+                var editNext = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (editNext != null)
+                {
+                    EditPrevNextProductType(editNext.ProductTypeId, true);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.EditPrevProductType:
+                var editPrev = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (editPrev != null)
+                {
+                    EditPrevNextProductType(editPrev.ProductTypeId, false);
+                }
+                break;
+        }
+    }
+}

@@ -1,0 +1,13 @@
+.content {
+    background-image: url(images/viands_logo_login.svg);
+    padding-top: 130px;
+    margin: 0 !important;
+    background-repeat: no-repeat;
+    background-position: center 0;
+    background-size: 70%;
+}
+
+.login_button {
+    width: 80%;
+    display: inline-block;
+}

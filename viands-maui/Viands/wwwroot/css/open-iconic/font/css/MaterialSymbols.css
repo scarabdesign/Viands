@@ -1,0 +1,27 @@
+@font-face {
+    font-family: 'MSO';
+    font-style: normal;
+    font-weight: 400;
+    src: url('../fonts/MaterialSymbolsOutlined.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'MSR';
+    font-style: normal;
+    font-weight: 400;
+    src: url('../fonts/MaterialSymbolsRounded.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'MSS';
+    font-style: normal;
+    font-weight: 400;
+    src: url('../fonts/MaterialSymbolsSharp.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'MIR';
+    font-style: normal;
+    font-weight: 400;
+    src: url('../fonts/MaterialIconsRegular.ttf') format('truetype');
+}

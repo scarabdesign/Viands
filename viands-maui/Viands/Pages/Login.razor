@@ -1,0 +1,243 @@
+@page "/login"
+
+@using SQLite;
+@using System.Diagnostics;
+@using System.ComponentModel.DataAnnotations;
+@using Viands.Data;
+@using Viands.Support;
+@inject IJSRuntime JS
+@implements IDisposable
+@inject NotificationService NotificationService
+
+<style>
+    .login_page {
+        scale: @WidthScale;
+    }
+</style>
+
+<div class="page login_page">
+    <main>
+        <article class="content rz-mx-5 rz-my-5">
+            <EditForm Model="@CurrentUser" >
+                <RadzenTextBox 
+                    Placeholder="Name"
+                    class="w-100"
+                    @bind-value="@CurrentUser.name"
+                    @onblur="@(e => {
+                        CurrentUser.name = !string.IsNullOrEmpty(CurrentUser.name) && 
+                            CurrentUser.name.Length > 1 ? 
+                                CurrentUser?.name[0].ToString().ToUpper() + CurrentUser?.name.Substring(1) : 
+                                CurrentUser.name;
+                        StateHasChanged();
+                    })"
+                    @onkeydown=@(args => KeyDown(0, args))
+                    @oninput="ClearNameError" />
+                <br />
+                <i class="rz-color-danger">@NameError</i>
+                <br />
+                <RadzenTextBox 
+                    Placeholder="Email"
+                    class="w-100"
+                    type="email"
+                    @ref=EmailInput
+                    @bind-value="@CurrentUser.email"
+                    @onclick="ShowUsers"
+                    @onkeydown=@(args => KeyDown(1, args))
+                    @oninput="@((e) => {
+                        ClearEmailError();
+                        LookupName((string)e.Value);
+                    })" />
+                <br />
+                <i class="rz-color-danger">@EmailError</i>
+                <br />
+                <RadzenPassword 
+                    Placeholder="Pass"
+                    class="w-100"
+                    @ref=PassInput
+                    @bind-value="@CurrentUser.password"
+                    @onkeydown=@(args => KeyDown(2, args))
+                    @oninput="@((e) => {
+                        ClearPassError();
+                    })" />
+                <br />
+                <i class="rz-color-danger">@PassError</i>
+                <br />
+                <RadzenButton Text="OK"
+                    class="login_button w-100"
+                    Variant="Variant.Flat"
+                    Click=ViewLists 
+                    ButtonStyle="ButtonStyle.Primary" />
+            </EditForm>            
+        </article>
+    </main>
+</div>
+
+@code
+{
+
+    public double WidthScale { get; set; } = 1.0;
+    public v_users CurrentUser { get; set; } = new v_users();
+    public string EmailError { get; set; }
+    public string NameError { get; set; }
+    public string PassError { get; set; }
+
+    private RadzenTextBox EmailInput;
+    private RadzenPassword PassInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        var users = await Users.GetUsers();
+        if (users != null && users.Count() == 1)
+        {
+            CurrentUser = users[0];
+        }
+        ChangeScale(DisplayUtils.GetWindowOrPopupSize()); 
+    }
+
+    void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                ChangeScale(DisplayUtils.GetWindowOrPopupSize());
+                break;
+        }
+    }
+
+    private void ChangeScale(Size windowSize)
+    {
+        // if(windowSize.Width <= 400)
+        // {
+        //     WidthScale = Convert.ToDouble((windowSize.Width / 400).ToString("0.00"));
+        //     StateHasChanged();
+        // }
+    }
+
+    private void ClearErrors()
+    {
+        ClearNameError();
+        ClearEmailError();
+    }
+
+    private void ClearNameError()
+    {
+        NameError = null;
+    }
+
+    private void ClearEmailError()
+    {
+        EmailError = null;
+    }
+
+    private void ClearPassError()
+    {
+        PassError = null;
+    }
+
+    private async void ShowUsers()
+    {
+        var allUsers = await Users.GetUsers();
+        if (allUsers != null && allUsers.Count() > 1)
+        {
+            allUsers.ForEach(u => Debug.WriteLine(u.id + " : " + u.name + " : " + u.email));
+        }
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async void LookupName(string email)
+    {
+        CurrentUser.email = email;
+        var userResult = await Users.GetUserByEmail(CurrentUser.email);
+        if (userResult != null)
+        {
+            CurrentUser.name = userResult.name;
+            StateHasChanged();
+        }
+    }
+
+    private void KeyDown(int input, KeyboardEventArgs args)
+    {
+        if(args.Key == "Enter")
+        {
+            if (input == 0)
+                JS.InvokeAsync<string>("focusTargetElement", EmailInput.Element);
+            if (input == 1)
+                JS.InvokeAsync<string>("focusTargetElement", PassInput.Element);
+            if (input == 2)
+                _ = ViewLists();
+        }
+    }
+
+    private void NotifyError(string error)
+    {
+        NotificationService.Notify(new NotificationMessage
+        {
+            Severity = NotificationSeverity.Error,
+            Summary = error,
+            Duration = 3000
+        });
+    }
+
+    private async Task ViewLists()
+    {
+        ClearErrors();
+        var strAttr = new StringLengthAttribute(250);
+        strAttr.MinimumLength = 1;
+        var validName = strAttr.IsValid(CurrentUser.name);
+        if (CurrentUser.name == null || !validName)
+        {
+            NameError = "Invalid Username";
+            NotifyError(strAttr.FormatErrorMessage("Name"));
+            return;
+        }
+
+        var emailAttr = new EmailAddressAttribute();
+        var validEmail = emailAttr.IsValid(CurrentUser.email);
+        if (CurrentUser.email == null || !validEmail)
+        {
+            EmailError = "Invalid Email";
+            NotifyError(emailAttr.FormatErrorMessage("Email"));
+            return;
+        }
+
+        var passAttr = new StringLengthAttribute(40);
+        passAttr.MinimumLength = 8;
+        var validPass = passAttr.IsValid(CurrentUser.password);
+        if (CurrentUser.password == null || !validPass)
+        {
+            PassError = "Invalid Password";
+            NotifyError(passAttr.FormatErrorMessage("Password"));
+            return;
+        }
+
+        var userResult = await Users.GetUserByEmail(CurrentUser.email);
+        var createUser = userResult == null;
+        var currentPass = CurrentUser.password;
+        CurrentUser = !createUser ? userResult : new v_users
+        {
+            name = CurrentUser.name,
+            email = CurrentUser.email,
+            apikey = LoginUtils.GetUserAPIKey(CurrentUser.email),
+            password = CurrentUser.password
+        };
+        if(CurrentUser.password == null)
+        {
+            CurrentUser.password = currentPass;
+        }
+        CurrentUser.current = true;
+        await LoginUtils.UpdateUser(CurrentUser, createUser);
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.UpdateUser, null);
+        LoginUtils.CheckLogin();
+    }
+}

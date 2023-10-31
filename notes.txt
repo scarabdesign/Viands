@@ -1,0 +1,24 @@
+How do I detect navigation events in Blazor WebAssembly
+https://www.syncfusion.com/faq/blazor/webassembly/how-do-i-detect-navigation-events-in-blazor-webassembly
+https://blazor-university.com/routing/detecting-navigation-events/
+
+FlexBox
+https://css-tricks.com/snippets/css/a-guide-to-flexbox/
+
+PX to REM converter
+https://nekocalc.com/px-to-rem-converter
+
+Core Razor component lifecycle
+https://learn.microsoft.com/en-us/aspnet/core/blazor/components/lifecycle?view=aspnetcore-7.0#after-parameters-are-set-onparameterssetasync
+
+Drag And Drop In Blazor Without JavaScript (broken?)
+https://www.c-sharpcorner.com/article/drag-and-drop-in-blazor-without-javascript/
+
+Theme
+https://learn.microsoft.com/en-us/answers/questions/1287134/detect-theme-change-of-android-device-in-maui-blaz
+
+refresh view
+https://learn.microsoft.com/en-us/dotnet/maui/user-interface/controls/refreshview
+
+
+

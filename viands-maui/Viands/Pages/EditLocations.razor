@@ -1,0 +1,331 @@
+﻿@page "/editlocations"
+
+@using SQLite;
+@using Viands.Data;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using System.Diagnostics;
+@using System.Text.Json;
+@inject IJSRuntime JS;
+@inject DialogService DialogService;
+@implements IDisposable;
+
+<div class="header_bar @(DisplayUtils.InItemEditMode ? "header_editing" : null )">
+    <div class="header_flex">
+        <div class="location_filter_container">
+            <RadzenTextBox 
+                Placeholder="Location Filter" 
+                class="location_filter" 
+                @ref=@FilterInput
+                @bind-Value=@SearchTerm
+                @oninput=@((e) => SearchTerm = e.Value.ToString()) 
+                @onblur=@(() => {
+                    JS.InvokeVoidAsync("checkFocus");
+                })
+            />
+            <span class="location_filter_clear_container">
+                <button 
+                    class="location_filter_clear"
+                    @onclick=@ClearFilter
+                />
+            </span>
+        </div>
+        <div class="list_edit_view">
+            <div class="edit_tools_right">
+                <RadzenButton Shade="Shade.Lighter" 
+                    class="location_ordermode_button"
+                    title="Order list items"
+                    ButtonStyle="ButtonStyle.Secondary" 
+                    Size="ButtonSize.Small" 
+                    Disabled=@(orderMode)
+                    Click=@(args => {
+                        orderMode = true;
+                        deleteMode = false;
+                    }) >
+                    <Blazicon Svg=MdiIcon.Sort />
+                </RadzenButton>
+                <RadzenButton 
+                    class="location_deletemode_button"
+                    title="Delete list items"
+                    Shade="Shade.Lighter" 
+                    ButtonStyle="ButtonStyle.Secondary" 
+                    Size="ButtonSize.Small"
+                    Disabled=@(deleteMode)
+                    Click=@(args => {
+                        orderMode = false;
+                        deleteMode = true;
+                    }) >
+                    <Blazicon Svg=Ionicon.TrashBinSharp />
+                </RadzenButton>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="lists_container" style="min-width: 200px">
+    @if (vLocationList != null)
+    {
+        foreach (var locationitem in vLocationList)
+        {
+            <div class="lists_item @(lastSelected == locationitem.Id ? "last_selected" : null)">
+                <div class="edit_tools_left">
+                    <span class="tool_item" @onclick=@(() => EditLocation(locationitem.Id)) title="Edit Location Type">
+                        <Blazicon Svg="MdiIcon.CircleEditOutline" class="edit_item" />
+                    </span>
+                </div>
+                <div class="edit_tools_right">
+                    @if (orderMode)
+                    {
+                        <span class="tool_item" @onclick=@(() => {
+                                if(locationitem.Order != 0) 
+                                    OrderList(locationitem.Id, -1);
+                            }) title="Order up">
+                            <span class="reorder_up @(locationitem.Id == vLocationList[0].Id ? "invisible" : null)">
+                                <Blazicon Svg="Ionicon.ArrowUpCircle" />
+                            </span>
+                        </span>
+                        <span class="tool_item" @onclick=@(() => {
+                                if(locationitem.Order >= vLocationList.Count - 1) 
+                                    return;
+                                OrderList(locationitem.Id, 1);
+                            }) title="Order down">
+                            <span class="reorder_down @(locationitem.Id == vLocationList[vLocationList.Count - 1].Id ? "invisible" : null)">
+                                <Blazicon Svg="Ionicon.ArrowDownCircle" />
+                            </span>
+                        </span>
+                    }
+                    @if (deleteMode)
+                    {
+                        <span class="tool_item delete_section">
+                            <span 
+                                title="@(deleteConfirm == locationitem.Id ? "Confirm Delete" : "Delete Item")"
+                                class="delete_item @(deleteConfirm == locationitem.Id ? "delete_item_confirm" : null)">
+                                <Blazicon 
+                                    Svg=@(deleteConfirm == locationitem.Id ? MdiIcon.DeleteForever : MdiIcon.Delete)
+                                    class="delete_confirm_button"
+                                    @onclick=@(() => DeleteConfirm(locationitem.Id)) 
+                                />
+                            </span>
+                            <span 
+                                title="Cancel Delete"
+                                class="delete_item @(deleteConfirm == locationitem.Id ? "delete_confirm" : null)">
+                                <Blazicon 
+                                    Svg="MdiIcon.Cancel"
+                                    class="delete_cancel_button"
+                                    @onclick=@(() => DeleteCanceled()) 
+                                />
+                            </span>
+                        </span>
+                    }
+                </div>
+                <div class="item_name">
+                    <RadzenLabel class="item_name_label_input">
+                        <span class="list_name_area">@locationitem.Name</span>
+                        <span class="list_desc_label">@locationitem.Description</span>
+                    </RadzenLabel>
+                </div>
+            </div>
+        }
+        @if (vLocationList.Count == 0)
+        {
+            @if (SearchTerm != null)
+            {
+                <div class="empty_list_message">There are no items matching filter "@SearchTerm".</div>
+            }
+            else
+            {
+                <div class="empty_list_message">There are no items in this list yet.</div>
+                <div class="empty_list_message">Tap the <Blazicon Svg=MdiIcon.PlusCircleOutline /> button to get started.</div>
+            }
+        }
+    }
+    <div id="list_spacer" style="height:200px"></div>
+</div>
+
+
+@code {
+
+    private bool jsModLoaded = false;
+    private int deleteConfirm = -1;
+    private bool deleteMode = true;
+    private bool orderMode = false;
+    private int lastSelected = -1;
+    private RadzenTextBox FilterInput;
+    private IJSObjectReference EditLocationsJS { get; set; }
+    private List<VLocation> vLocationList = new List<VLocation>();
+    private string _SearchTerm;
+    private string SearchTerm
+    {
+        get
+        {
+            return _SearchTerm;
+        }
+        set
+        {
+            _SearchTerm = value;
+            _ = RefreshLists();
+        }
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            EditLocationsJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/EditLocations.razor.js");
+            await EditLocationsJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, "Manage Locations");
+        }
+        if (jsModLoaded)
+        {
+
+        }
+
+        resetLastSelected();
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task RefreshLists()
+    {
+        vLocationList = string.IsNullOrEmpty(SearchTerm) ? 
+            await VLocation.GetAllLocations() : 
+            await VLocation.FilterAllLocations(SearchTerm);
+
+        StateHasChanged();
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async Task ClearFilter()
+    {
+        SearchTerm = null;
+        await JS.InvokeVoidAsync("focusTargetElement", FilterInput.Element);
+    }
+
+    private void DeleteCanceled()
+    {
+        deleteConfirm = -1;
+    }
+
+    private async Task DeleteConfirm(int itemid)
+    {
+        if (deleteConfirm == itemid)
+        {
+            await DeleteLocation(itemid);
+            deleteConfirm = -1;
+            return;
+        }
+        deleteConfirm = itemid;
+    }
+
+    private void SelectItem(int locationId)
+    {
+        lastSelected = locationId;
+    }
+
+    private async void OrderList(int locationid, int upDn)
+    {
+        SelectItem(locationid);
+        var targ = vLocationList?.FirstOrDefault(l => l.Id == locationid);
+        var next = vLocationList?.FirstOrDefault(l => l.Order == targ.Order + upDn);
+        var oldOrder = targ.Order;
+        targ.Order = next.Order;
+        next.Order = oldOrder;
+        await VLocation.SaveLocations(vLocationList);
+        await RefreshLists();
+    }
+
+    private async Task DeleteLocation(int itemid)
+    {
+        await VLocation.DeleteLocation(itemid);
+        await RefreshLists();
+    }
+
+    private void EditLocation(int locationid)
+    {
+        var index = GetIndexForLocation(locationid);
+        var isLast = index >= vLocationList.Count - 1;
+        var isFirst = locationid == 0 || index == 0;
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditLocation, new GlobalCallbacks.EditLocationResponse
+        {
+            LocationId = locationid,
+            IsFirst = isFirst,
+            IsLast = isLast,
+            AddEdit = false,
+        });
+    }
+
+    private int GetIndexForLocation(int locationid)
+    {
+        //FIX ME
+        return vLocationList.IndexOf(vLocationList.FirstOrDefault(pt => pt.Id == locationid));
+    }
+
+    private void EditPrevNextLocation(int locationid, bool nextPrev)
+    {
+        var index = GetIndexForLocation(locationid);
+        var newIndex = index + (nextPrev ? 1 : -1);
+        if (newIndex >= vLocationList.Count - 1)
+        {
+            newIndex = vLocationList.Count - 1;
+        }
+        if (newIndex < 0)
+        {
+            newIndex = 0;
+        }
+        var nextProdType = vLocationList.ElementAtOrDefault(newIndex);
+        if (nextProdType != null)
+        {
+            EditLocation(nextProdType.Id);
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        deleteConfirm = -1;
+        await RefreshLists();
+    }
+
+    private async void resetLastSelected()
+    {
+        await Task.Delay(300);
+        await JS.InvokeAsync<string>("removeLastSelected", null);
+    }
+
+    public void Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.RefreshLists:
+                _ = RefreshLists();
+                break;
+            case GlobalCallbacks.CBKeys.EditNextLocation:
+                var editNext = (args as GlobalCallbacks.EditLocationResponse);
+                if (editNext != null)
+                {
+                    EditPrevNextLocation(editNext.LocationId, true);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.EditPrevLocation:
+                var editPrev = (args as GlobalCallbacks.EditLocationResponse);
+                if (editPrev != null)
+                {
+                    EditPrevNextLocation(editPrev.LocationId, false);
+                }
+                break;
+        }
+    }
+}

@@ -1,0 +1,141 @@
+::deep.confirm_delete_list .rz-dialog-content {
+    padding: 10px !important;
+}
+
+.lists_container {
+    padding-left: 0.1rem;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    height: 100vh;
+}
+
+.lists_container::-webkit-scrollbar {
+    background: transparent;
+    width: 8px;
+}
+
+.lists_container::-webkit-scrollbar-thumb {
+    background: #999;
+    border-radius: 5px;
+}
+
+.list_desc_label {
+    font-size: 1em;
+    font-style: italic;
+    color: #afafaf;
+    margin-left: 1em;
+    text-overflow: ellipsis;
+}
+
+.list_name_label, .list_desc_label {
+    cursor: pointer;
+    vertical-align: -webkit-baseline-middle;
+}
+
+::deep .list_name_input {
+    display: none;
+    font-weight: bold;
+    font-size: unset;
+    height: unset;
+    min-height: 2rem;
+    width: 100%;
+}
+
+.list_name {
+    width: 100%;
+    overflow: hidden;
+    padding: 0 0.5em;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.last_selected {
+    background-color: #9ACD32 !important;
+    transition: background-color 0s linear;
+}
+
+.tool_item.hide {
+    display: none;
+}
+
+.tool_item {
+    font-size: 1.5em;
+    line-height: 1em;
+    width: 100%;
+    text-align: center;
+    margin: auto;
+}
+
+.edit_tools_left .tool_item {
+    border-left: none;
+    border-right: 1px solid lightgray;
+}
+
+.edit_tools_left {
+    display: none;
+    width: 10%;
+}
+
+.edit_mode .edit_tools_right,
+.edit_mode .edit_tools_left {
+    display: flex;
+    justify-content: space-evenly;
+}
+
+
+.edit_tools_right {
+    display: none;
+    width: 40%;
+}
+
+    .edit_tools_right .tool_item {
+        border-left: 1px solid lightgray;
+    }
+
+.lists_item:has(.tool_item:active .reorder_down:not(.invisible)),
+.lists_item:has(.tool_item:active .reorder_up:not(.invisible)) {
+    background: #9ACD32;
+}
+
+.lists_item:has(.delete_item:active) {
+    background: pink;
+}
+
+.lists_item:active label {
+    scale: 0.98;
+    color: black;
+}
+
+.lists_item:active {
+    background-color: rgba(255, 255, 255, 0.7);
+}
+
+.lists_item.fade {
+    transition: background-color 100ms linear, opacity 500ms linear;
+}
+
+    .lists_item.fade.out {
+        opacity: 0;
+    }
+
+    .lists_item.fade.in {
+        opacity: 1;
+    }
+
+.lists_item.hide {
+    display: none;
+}
+
+.lists_item {
+    background-color: white;
+    border-width: 0;
+    border-style: solid;
+    margin-bottom: 1px;
+    cursor: pointer;
+    font-weight: bold;
+    color: #333;
+    display: flex;
+    justify-content: space-between;
+    color: #444;
+    min-height: 34px;
+}

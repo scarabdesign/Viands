@@ -1,0 +1,380 @@
+﻿@using System.Diagnostics;
+@using Microsoft.AspNetCore.WebUtilities
+@using Viands.Data;
+@using Viands.Support;
+@using Viands.Pages;
+@using Microsoft.Maui.Graphics;
+
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@inherits LayoutComponentBase;
+@implements IDisposable
+@inject NavigationManager NavigationManager
+
+<RadzenDialog />
+<RadzenNotification />
+<RadzenContextMenu />
+<RadzenTooltip />
+
+<style>
+    body {
+        font-size: @GlobalFontSize;
+    }
+</style>
+
+<div class="main_page page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <div class="title_bar">
+                <span class="title_text">@TitleBar</span>
+            </div>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code
+{
+    private string TitleBar { get; set; }
+    private string GlobalFontSize { get; set; } = "100%";
+    private Size WindowSize { get; set; } = DisplayUtils.GetWindowSize();
+
+    private async void UpdateUser()
+    {
+        GlobalFontSize = SettingsUtils.GetConvFontString(await SettingsUtils.GetConvFontInt());
+        StateHasChanged();
+    }
+
+    private async void RefreshPage()
+    {
+        await JS.InvokeAsync<string>("location.reload", null);
+    }
+
+    private void CloseDialog()
+    {
+        DialogService?.Close();
+    }
+
+    private async Task DisplayDialog<T>(
+        string title, Dictionary<string, object> pars, bool easyClose = true, bool closeButton = false,
+        Double width = 0, Double height = 0, bool onOff = false, bool adjustTop = true, bool closePreviousWindow = true
+    ) where T : ComponentBase
+    {
+        if (closePreviousWindow)
+            CloseDialog();
+        if (!onOff) return;
+
+        var className = typeof(T).Name.ToLower() + "_modal";
+        var opts = new DialogOptions()
+        {
+            CssClass = className + " rz-dialog-confirm",
+            CloseDialogOnOverlayClick = easyClose,
+            ShowTitle = title != null ? true : false,
+            ShowClose = closeButton,
+            AutoFocusFirstElement = false
+        };
+
+        if(width != 0 || height != 0)
+        {
+            opts.Width = width + "px !important";
+            opts.Height = height + "px !important";
+        }
+        else
+        {
+            var windowSize = DisplayUtils.GetWindowSize();
+            if(windowSize.Width < 600)
+            {
+                opts.Width = windowSize.Width + "px !important";
+            }
+        }
+
+        if (adjustTop)
+            DialogService.OnOpen += AdjustModalTop;
+
+        await DialogService.OpenAsync<T>(title, pars, opts);
+
+        if (adjustTop)
+            DialogService.OnOpen -= AdjustModalTop;
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.DialogClosed, className);
+    }
+
+    private async void AdjustModalTop(string a, Type b, Dictionary<string, object> c, DialogOptions d)
+    {
+        await Task.Delay(200);
+        await JS.InvokeAsync<string>("adjustModalForStatusBar", null);
+    }
+
+    private async void ShowHideSettings(bool onOff = false)
+    {
+        var globalFontSize = await SettingsUtils.GetConvFontInt();
+        DisplayUtils.ExitEditModes();
+        await Task.Delay(300);
+        var size = DisplayUtils.GetWindowSize();
+        await DisplayDialog<Pages.Settings>(
+            "Settings", new Dictionary<string, object>() { { "GlobalFontConvInt", globalFontSize } },
+            true, true, size.Width - 100, size.Height - 100, onOff
+        );
+
+        RefreshPage();
+    }
+
+    private async void ShowHideLogin(bool onOff = false)
+    {
+        var size = DisplayUtils.GetWindowSize();
+        await DisplayDialog<Pages.Login>(
+            null, null, false, false, size.Width, size.Height, onOff
+        );
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.UpdateUser, null);
+    }
+
+    private async void EditLocation(int locationid, bool isFirst, bool isLast, bool isSingle, bool addEdit)
+    {
+        await DisplayDialog<Pages.EditLocation>(null, new Dictionary<string, object>
+            {
+                { "LocationId", locationid },
+                { "IsFirst", isFirst },
+                { "IsLast", isLast },
+                { "Singleton", isSingle },
+                { "AddEdit", addEdit }
+            },
+            false, false, 0, 0, true, true, !isSingle
+        );
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+    }
+
+    private async void EditProductType(GlobalCallbacks.EditProductTypeResponse request)
+    {
+        if (request == null) return;
+        await DisplayDialog<Pages.EditProductType>(null, new Dictionary<string, object>
+            {
+                { "ProductTypeId", request.ProductTypeId },
+                { "ListItemId", request.ListItemId },
+                { "ListId", request.ListId },
+                { "UPC", request.UPC },
+                { "IsFirst", request.IsFirst },
+                { "IsLast", request.IsLast },
+                { "Quantity", request.Quantity },
+                { "FromBarcode", request.FromBarcode }
+            }, 
+            false, false, 0, 0, true
+        );
+    }
+
+    private async void SelectProductSets(SelectSetRequest request)
+    {
+        if (request == null) return;
+        await DisplayDialog<Pages.SelectSet>(null, new Dictionary<string, object>
+            {
+                { "ListId",  request.ListId },
+                { "ShowAddNew",  request.ShowAddNew }
+            },
+            false, false, 350, 0, true
+        );
+
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        var response = (args as GlobalCallbacks.GeneralResponse);
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.EditProductType:
+                var editproducttyperesponse = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (editproducttyperesponse != null)
+                {
+                    EditProductType(editproducttyperesponse);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.EditLocation:
+                var editlocationrespose = (args as GlobalCallbacks.EditLocationResponse);
+                if (editlocationrespose != null)
+                {
+                    EditLocation(
+                        editlocationrespose.LocationId,
+                        editlocationrespose.IsFirst,
+                        editlocationrespose.IsLast,
+                        editlocationrespose.Singleton,
+                        editlocationrespose.AddEdit
+                    );
+                }
+                break;
+            case GlobalCallbacks.CBKeys.UpdateUser:
+                UpdateUser();
+                break;
+            case GlobalCallbacks.CBKeys.ShowHideLogin:
+                ShowHideLogin((bool)args);
+                break;
+            case GlobalCallbacks.CBKeys.ShowHideSettings:
+                ShowHideSettings((bool)args);
+                break;
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.WindowResized:
+                var newSize = (Size)args;
+                if (newSize.Width != 0 && newSize.Height != 0)
+                {
+                    WindowSize = newSize;
+                }
+                WindowResized();
+                break;
+            case GlobalCallbacks.CBKeys.RefreshMainLayout:
+                RefreshPage();
+                break;
+            case GlobalCallbacks.CBKeys.ProductSetsSelected:
+            case GlobalCallbacks.CBKeys.CloseDialog:
+                CloseDialog();
+                break;
+            case GlobalCallbacks.CBKeys.Navigate:
+                if (response != null && response.ResponseType == GlobalCallbacks.ResponseTypes.Navigate)
+                {
+                    NavigateTo(response.UrlArg, response.StringArg);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.SetTitle:
+                TitleBar = (string)args;
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.OpenSelectProductSets:
+                SelectProductSets(args as SelectSetRequest);
+                break;
+            case GlobalCallbacks.CBKeys.EditProductTypeByUPC:
+                ShowBarcodeView(args as GlobalCallbacks.EditProductTypeResponse, EditProductType);
+                break;
+            case GlobalCallbacks.CBKeys.RequestLineItemForUPC:
+                ShowBarcodeView(
+                    args as GlobalCallbacks.EditProductTypeResponse, 
+                    request => GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.ResponseLineItemForUPC, request)
+                );
+                break;
+            case GlobalCallbacks.CBKeys.RequestUPCForProductType:
+                ShowBarcodeView(
+                    args as GlobalCallbacks.EditProductTypeResponse, 
+                    request => GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.ResponseUPCForProductType, request)
+                );
+                break;
+        }
+    }
+
+    private async void WindowResized()
+    {
+        await JS.InvokeVoidAsync("windowResized", null);
+        await Task.Delay(300);
+        await JS.InvokeVoidAsync("windowResized", null);
+    }
+
+    private void ShowBarcodeView(GlobalCallbacks.EditProductTypeResponse request, Action<GlobalCallbacks.EditProductTypeResponse> onResults)
+    {
+        var mainpage = Application.Current.MainPage as MainPage;
+        mainpage?.ShowBarcodeView(upcs =>
+        {
+            if (upcs != null)
+            {
+                if (request == null) 
+                    request = new GlobalCallbacks.EditProductTypeResponse();
+
+                if (upcs.Count == 0)
+                    onResults(null);
+
+                request.UPC = upcs[0];
+                request.FromBarcode = true;
+                var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+                var query = QueryHelpers.ParseQuery(uri.Query);
+                if (query.TryGetValue("listid", out var listid))
+                {
+                    int.TryParse(listid.ToString(), out int lid);
+                    if (lid > 0)
+                    {
+                        request.ListId = lid;
+                    }
+                }
+
+                onResults(request);
+            }
+        });
+    }
+
+    private void NavigateTo(string url, string args)
+    {
+        if (args != null)
+        {
+            url += "?" + args;
+        }
+
+        NavigateTo(url);
+    }
+
+    private async void NavigateTo(string url)
+    {
+        NavigationManager?.NavigateTo(url, false, true);
+        await Task.Delay(300);
+        await JS.InvokeVoidAsync("windowResized", null);
+    }
+
+    protected override void OnInitialized()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        UpdateUser();
+        LoginUtils.CheckLogin();
+    }
+
+    void IDisposable.Dispose()
+    {
+      GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private async void TestDemarc()
+    {
+        var test = Support.Constants.DemarcationOptions.Unmarked;
+        Debug.WriteLine("A: " + test);
+        //Add
+        test |= Support.Constants.DemarcationOptions.Checked;
+        Debug.WriteLine("B1: " + test);
+        //Add
+        test |= Support.Constants.DemarcationOptions.Blue;
+        Debug.WriteLine("B2: " + test);
+        //Add
+        test |= Support.Constants.DemarcationOptions.StrikeThrough;
+        Debug.WriteLine("B3: " + test);
+        //Remove
+        test &= ~Support.Constants.DemarcationOptions.Checked;
+        Debug.WriteLine("C: " + test);
+        //Toggle
+        test ^= Support.Constants.DemarcationOptions.Orange | Support.Constants.DemarcationOptions.StrikeThrough;
+        Debug.WriteLine("D: " + test);
+
+        Debug.WriteLine("E: " + test.HasFlag(Support.Constants.DemarcationOptions.Blue));
+        Debug.WriteLine("F: " + test.HasFlag(Support.Constants.DemarcationOptions.StrikeThrough));
+        Debug.WriteLine("G: " + test.HasFlag(Support.Constants.DemarcationOptions.Unmarked)); //Won't work here
+
+        Debug.WriteLine("TEST A: " + (int)Support.Constants.DemarcationOptions.Unset);
+        Debug.WriteLine("TEST B: " + (int)Support.Constants.DemarcationOptions.Unmarked);
+        Debug.WriteLine("TEST C: " + (int)Support.Constants.DemarcationOptions.Checked);
+        Debug.WriteLine("TEST D: " + (int)Support.Constants.DemarcationOptions.RedViolet);
+
+        Debug.WriteLine("TEST E: " + (Support.Constants.DemarcationOptions)Convert.ToInt32(((int)Support.Constants.DemarcationOptions.Unset).ToString("X"), 16));
+        Debug.WriteLine("TEST F: " + (Support.Constants.DemarcationOptions)Convert.ToInt32(((int)Support.Constants.DemarcationOptions.Unmarked).ToString("X"), 16));
+        Debug.WriteLine("TEST G: " + (Support.Constants.DemarcationOptions)Convert.ToInt32(((int)Support.Constants.DemarcationOptions.Checked).ToString("X"), 16));
+        Debug.WriteLine("TEST H: " + (Support.Constants.DemarcationOptions)Convert.ToInt32(((int)Support.Constants.DemarcationOptions.RedViolet).ToString("X"), 16));
+
+
+        Debug.WriteLine("TEST I: " + (Support.Constants.DemarcationOptions)Convert.ToInt32(((int)test).ToString("X"), 16));
+        Debug.WriteLine("TEST J: " + string.Join("\",\"", ((Support.Constants.DemarcationOptions)test).ToString().ToLower().Split(", ").ToArray()));
+
+
+        await Task.Delay(0);
+        //CloseDialog();
+    }
+}

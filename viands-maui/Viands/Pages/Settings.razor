@@ -1,0 +1,567 @@
+@page "/settings"
+@using System.Diagnostics;
+@using Viands.Data;
+@using Viands.Support;
+@using static Viands.Support.Utils;
+@using Viands.Components;
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+@inject IJSRuntime JS
+
+<style>
+    body {
+        font-size: @SettingsUtils.GetConvFontString(GlobalFontConvInt) !important;
+    }
+</style>
+
+<div class="setting_section logout_container">
+    <label>Logged in as: @CurrentUser.name</label>
+    <div class="rz-text-align-center control_container">
+        <div class="inline-link" @onclick=@LoginUtils.LogOut title="Log Out" tabindex="-1">
+            <label>Log Out</label>
+            <Blazicon Svg=Ionicon.LogOutSharp />
+        </div>
+    </div>
+</div>
+
+<div class="setting_section">
+    <label>Font Size: (@SettingsUtils.GetConvFontString(GlobalFontConvInt))</label>
+    <div class="rz-text-align-center control_container">
+        <RadzenSlider @bind-Value=@GlobalFontConvInt TValue="int" Step="1"
+            Min=@SettingsUtils.FontSizeConvMin
+            Max=@SettingsUtils.FontSizeConvMax
+            Change="OnParametersSet" />
+    </div>
+</div>
+
+<div class="setting_section">
+    <RadzenLabel Text="Show Tools Helper" Component="showToolsHelper" class="show_tools_helper_label" />
+    <div class="rz-text-align-center control_container">
+        <RadzenCheckBox @bind-Value=@ShowToolsHelper Name="showToolsHelper" class="show_tools_helper" />
+    </div>
+</div>
+
+<div class="setting_section">
+    <label @onclick=@(() => backupSectionShowing = !backupSectionShowing)>
+        <span class="expander_container">
+            <span class="expander @(backupSectionShowing ? "down" : "left")"></span>
+        </span>
+        Data & Backups
+    </label>
+    <div class="backup_panel @(backupSectionShowing ? null : "hide")">
+        <div class="backup_panel_head">
+            <RadzenButton Variant="Variant.Flat" Click=@ConfirmClearDatabase Size="ButtonSize.Small">Clear Data</RadzenButton>
+            <TimerButton Variant="Variant.Flat" OnClickCallback=@BackupDatabase Size="ButtonSize.Small">Backup Data</TimerButton>
+            <TimerButton Variant="Variant.Flat" OnClickCallback=@ListCloudBackups Size="ButtonSize.Small" >
+                <i class="rz-button-icon-left rzi">cloud</i>
+            </TimerButton>
+        </div>
+        <div class="backup_panel_head">
+            <RadzenLabel Text="Backup to Cloud" Component="backupToServer" class="backup_to_server_label" />
+            <RadzenCheckBox @bind-Value=@BackupToServer Name="backupToServer" class="backup_to_server" />
+        </div>
+        <div class="backup_list">
+            @if (BackupPaths.Count == 0)
+            {
+                <i>No backups yet</i>
+            }
+            else
+            {
+                @foreach (var backup in BackupPaths)
+                {
+                    <div class="backup_selection">
+                        <span class="backup_selection_name" @onclick=@(() => ConfirmRestore(backup))>
+                            @GetBackupName(backup)
+                        </span>
+                        <span class="delete_backup_container">
+                            <span 
+                                class="cloud_sync_button_container @(GetBackupStatus(backup))"
+                                title="@(GetBackupStatusTitle(backup))">
+                                <RadzenButton 
+                                    Click=@(args => SyncBackup(backup))
+                                    Icon="cloud_sync" 
+                                    Size="ButtonSize.ExtraSmall"
+                                    class="rz-border-radius-10 rz-shadow-4"
+                                />
+                            </span>
+                            <RadzenButton 
+                                Click=@(args => ConfirmDelete(backup))
+                                Icon="delete_forever" 
+                                Size="ButtonSize.ExtraSmall"
+                                class="rz-border-radius-10 rz-shadow-4"
+                            />
+                        </span>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+
+@* 
+<div class="setting_section">
+    <div class="rz-text-align-center control_container">
+        <button @onclick="ToggleLightDark" >Dark</button>
+    </div>
+    <label>Toggle Light/Dark</label>
+</div>
+<div class="setting_section">
+    <button @onclick="maketestdata">Make test data</button>
+</div>
+ *@
+
+@code {
+
+    [Parameter]
+    public int GlobalFontConvInt { get; set; }
+
+    private bool backupSectionShowing = false;
+    private v_users CurrentUser { get; set; } = new v_users();
+    private List<v_settings> UserSettings { get; set; } = new List<v_settings>();
+    private List<string> BackupPaths { get; set; } = new List<string>();
+
+    public bool _ShowToolsHelper { get; set; } = false;
+    public bool ShowToolsHelper
+    {
+        get => _ShowToolsHelper;
+        set
+        {
+            if (_ShowToolsHelper != value)
+            {
+                _ShowToolsHelper = value;
+                SettingsUtils.SetBoolSetting(SettingsUtils.SettingTypes.ShowToolsHelper, _ShowToolsHelper);
+            }
+        }
+    }
+
+    public bool _BackupToServer { get; set; } = true;
+    public bool BackupToServer
+    {
+        get => _BackupToServer;
+        set
+        {
+            if (_BackupToServer != value)
+            {
+                _BackupToServer = value;
+                SettingsUtils.SetBoolSetting(SettingsUtils.SettingTypes.BackupToServer, _BackupToServer);
+            }
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        CurrentUser = await LoginUtils.GetCurrentUser();
+        UserSettings = CurrentUser != null ? await SettingsUtils.GetUserSettings(CurrentUser.apikey) : UserSettings;
+        _BackupToServer = await SettingsUtils.GetBoolSetting(SettingsUtils.SettingTypes.BackupToServer);
+        _ShowToolsHelper = await SettingsUtils.GetBoolSetting(SettingsUtils.SettingTypes.ShowToolsHelper);
+        BuildBackupList();
+        await JS.InvokeAsync<string>("adjustSettingsWindow", null);
+    }
+
+    private void BuildBackupList()
+    {
+        if (!Directory.Exists(Viands.Data.Constants.DatabaseBackupFolder))
+        {
+            Directory.CreateDirectory(Viands.Data.Constants.DatabaseBackupFolder);
+        }
+        BackupPaths = Directory.GetFiles(Viands.Data.Constants.DatabaseBackupFolder).Order().Reverse().ToList();
+    }
+
+    private async Task BackupDatabase()
+    {
+        await Data.Constants.Database.BackupDatabase(await LoginUtils.GetCurrentUserApiKey(), BackupToServer);
+        BuildBackupList();
+    }
+
+    private async Task ListCloudBackups()
+    {
+        BackupPaths = await ViandsService.ListFormattedCloudBackups(BackupPaths);
+    }
+
+    protected override void OnParametersSet()
+    {
+        SetSetting(SettingsUtils.SettingTypes.FontSize, GlobalFontConvInt.ToString());
+    }
+
+    private void ToggleLightDark()
+    {
+        //TODO: fix this
+        Application.Current.UserAppTheme = Application.Current.RequestedTheme == AppTheme.Dark ? AppTheme.Light : AppTheme.Dark;
+    }
+
+    private CancelableWait preSaveWait;
+    private void SetSetting(SettingsUtils.SettingTypes type, string settingValue)
+    {
+        if (CurrentUser == null || string.IsNullOrEmpty(CurrentUser.apikey)) return;
+        preSaveWait?.Cancel();
+        preSaveWait = new CancelableWait();
+        preSaveWait.Wait(700, () =>
+        {
+            SettingsUtils.SetSetting(type, settingValue, CurrentUser.apikey);
+        });
+    }
+
+    private string GetBackupName(string backuppath)
+    {
+        return Path.GetFileName(backuppath)?.Split(".")?.ElementAt(0)?.Replace("_", ":").Replace("T", " ") ?? "Unknown Backup";
+    }
+
+    private string GetBackupStatusTitle(string backuppath)
+    {
+        switch (GetBackupStatus(backuppath))
+        {
+            case ViandsCloudBackupStatus.CloudSuccess:
+                return "Backup successfully synced to server";
+            case ViandsCloudBackupStatus.CloudFailed:
+                return "Sync to server failed";
+            case ViandsCloudBackupStatus.RemoteAvailable:
+                return "Backup available to download";
+            case ViandsCloudBackupStatus.LocalFailed:
+            case ViandsCloudBackupStatus.LocalSuccess:
+            default:
+                return "Backup not synced to server";
+        }
+    }
+
+    private string GetBackupStatus(string backuppath)
+    {
+        var nameParts = Path.GetFileName(backuppath)?.Split(".");
+        if (nameParts.Contains(BackupStatusFilenames.CloudSuccess))
+        {
+            return ViandsCloudBackupStatus.CloudSuccess;
+        }
+
+        if (nameParts.Contains(BackupStatusFilenames.CloudFailed))
+        {
+            return ViandsCloudBackupStatus.CloudFailed;
+        }
+
+        if (nameParts.Contains(BackupStatusFilenames.LocalFailed))
+        {
+            return ViandsCloudBackupStatus.LocalFailed;
+        }
+
+        if (nameParts.Contains(BackupStatusFilenames.RemoteAvailable))
+        {
+            return ViandsCloudBackupStatus.RemoteAvailable;
+        }
+
+        return ViandsCloudBackupStatus.LocalSuccess;
+    }
+
+    private async Task ConfirmDelete(string backupPath)
+    {
+        var cloud = backupPath.Contains(Support.Constants.VirtualCloudPath);
+        var delete = await DialogService.Confirm(
+            "Delete the " + (cloud ? "cloud" : null) + " backup created {" + GetBackupName(backupPath) + "}?",
+            "Delete " + (cloud ? "cloud" : null) + " backup?", new ConfirmOptions()
+            {
+                OkButtonText = "Delete",
+                CancelButtonText = "Cancel"
+            }) ?? false;
+
+        if (delete)
+        {
+            if (cloud)
+            {
+                Debug.WriteLine("Delete cloud backup confirm: " + backupPath);
+                var success = await ViandsService.ViandsDeleteCloudBackup(await LoginUtils.GetCurrentUserApiKey(), Path.GetFileName(backupPath));
+
+                var sev = NotificationSeverity.Warning;
+                var message = "Remote Backup Deleted";
+                if (!success)
+                {
+                    sev = NotificationSeverity.Error;
+                    message = "Remote Deletion Failed";
+                }
+
+                NotificationService.Notify(new NotificationMessage
+                {
+                    Severity = sev,
+                    Summary = message,
+                    Duration = 3000
+                });
+
+                BuildBackupList();
+                await ListCloudBackups();
+                return;
+            }
+
+            Data.Constants.Database.DeleteBackup(backupPath);
+            BuildBackupList();
+        }
+    }
+
+    private async Task ConfirmRestore(string backupPath)
+    {
+        var restore = await DialogService.Confirm(
+            "Restore data to a backup created {" + GetBackupName(backupPath) + "} and overwrite current data?",
+            "Restore data?", new ConfirmOptions() 
+            { 
+                OkButtonText = "Restore", 
+                CancelButtonText = "Cancel" 
+            }) ?? false;
+
+        if (restore)
+        {
+            var message = "Data Restored";
+            var sev = NotificationSeverity.Warning;
+
+            if (backupPath.Contains(Support.Constants.VirtualCloudPath))
+            {
+                if(await DoSyncBackup(backupPath, false))
+                {
+                    message = "Cloud Backup Restored";
+                }
+                else
+                {
+                    message = "Data Restore Failed";
+                    sev = NotificationSeverity.Error;
+                }
+
+                NotificationService.Notify(new NotificationMessage
+                {
+                    Severity = sev,
+                    Summary = message,
+                    Duration = 3000
+                });
+
+                BuildBackupList();
+                return;
+            }
+
+            await Data.Constants.Database.RestoreDatabase(backupPath);
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+            BuildBackupList();
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = sev,
+                Summary = message,
+                Duration = 3000
+            });
+        }
+    }
+
+    private async Task ConfirmClearDatabase()
+    {
+        var makeBackup = false;
+        var clear = await DialogService.OpenAsync("Clear data?", ds => 
+            @<RadzenStack Gap="1.5rem">
+                <p>You are about to clear all lists, locations, products and sets, 
+                    and then you'll be logged out. This can only be undone by restoring a prevoius backup. 
+                    It is recommended that you make a backup of the data prior to clearing.
+                </p>
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" >
+                    <RadzenButton Text="Cancel" Click="() => ds.Close(false)" Variant="Variant.Flat" Size="ButtonSize.Small" />
+                    <RadzenButton Text="Clear Data" Click="() => ds.Close(true)" Variant="Variant.Flat" Size="ButtonSize.Small"  />
+                    <RadzenButton Text="Backup and Clear" Click="(() => { makeBackup = true;  ds.Close(true); })" Variant="Variant.Flat" Size="ButtonSize.Small"  />
+                </RadzenStack>
+        </RadzenStack>
+    ) ?? false;
+
+        if (makeBackup)
+        {
+            await Data.Constants.Database.BackupDatabase(await LoginUtils.GetCurrentUserApiKey(), BackupToServer);
+        }
+
+        if (clear)
+        {
+            await Data.Constants.Database.ClearDatabase();
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+            BuildBackupList();
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Warning,
+                Summary = "Data Cleared Successfully",
+                Duration = 3000
+            });
+        }
+    }
+
+    private async Task SyncBackup(string backupPath)
+    {
+        if(await DoSyncBackup(backupPath, true)){
+            BuildBackupList();
+        }
+    }
+
+    private async Task<bool> DoSyncBackup(string backupPath, bool downloadOnly)
+    {
+        bool result = false;
+        if (backupPath.Contains(Support.Constants.VirtualCloudPath))
+        {
+            var filename = Path.GetFileNameWithoutExtension(backupPath);
+            result = await ViandsService.ViandsCloudRestore(await LoginUtils.GetCurrentUserApiKey(), filename, downloadOnly);
+        }
+        else
+        {
+            result = await ViandsService.ViandsCloudBackup(await LoginUtils.GetCurrentUserApiKey(), backupPath);
+        }
+        return result;
+    }
+}
+
+
+
+
+
+
+@code{
+    private async void maketestdata()
+    {
+        await Locations.SaveLocations(new List<v_locations>()
+        {
+            new v_locations
+            {
+                name = "Market of Choice",
+                address = "67 W 29th Ave",
+                city = "Eugene",
+                zip = "97405",
+                description = "Faux-snobby overpriced grocery store",
+                coordinates = "44.02700655191841, -123.0939962169917"
+            },
+            new v_locations
+            {
+                name = "Wild Child",
+                address = "Farmer's Market",
+                city = "Eugene",
+                description = "Good local organic produce"
+            }
+        });
+
+
+
+        await Prices.UpsertPrice(new v_prices
+        {
+            product_size = "lots",
+            price = 1234,
+            per_unit_type = "per lb",
+            on_sale = true,
+            date_created = DateTime.Now,
+            date_updated = DateTime.Now
+        });
+        
+
+        var apikey = await LoginUtils.GetCurrentUserApiKey();
+        var lists = new List<v_lists>()
+        {
+            new v_lists
+            {
+                owner_id = apikey,
+                name = "My first list 2",
+                description = "This is the description",
+                is_template = false
+            },
+
+            new v_lists
+            {
+                owner_id = apikey,
+                name = "My Second List",
+                description = "Another description",
+                is_template = false
+            },
+
+            new v_lists
+            {
+                owner_id = apikey,
+                name = "List Three",
+                description = "Third list desc",
+                is_template = false
+            }
+        };
+
+        var prodTypes = new List<v_producttypes>()
+        {
+            new v_producttypes
+            {
+                typename = "Toilet paper"
+            },
+            new v_producttypes
+            {
+                typename = "Paper Towels"
+            },
+            new v_producttypes
+            {
+                typename = "Shampoo"
+            },
+            new v_producttypes
+            {
+                typename = "Bubbly Water"
+            },
+            new v_producttypes
+            {
+                typename = "Vegan slices"
+            },
+            new v_producttypes
+            {
+                typename = "Tofu"
+            },
+            new v_producttypes
+            {
+                typename = "Apples"
+            },
+            new v_producttypes
+            {
+                typename = "Lettuce"
+            },
+            new v_producttypes
+            {
+                typename = "Dog food"
+            }
+        };
+
+
+        makedata(apikey, lists, prodTypes);
+    }
+
+    private async void makedata(string apikey, List<v_lists> lists, List<v_producttypes> pros)
+    {
+        var index = 0;
+        for (; index < 3; index++)
+        {
+            var list = lists[index];
+            var upsertListRowId = await Lists.UpsertList(list);
+            if (upsertListRowId != 0)
+            {
+                var resultList = await Lists.GetLists(apikey);
+                var target = resultList.Where(l => l.name == list.name).FirstOrDefault();
+                if (target != null)
+                {
+                    var pindex = 0;
+                    for (; pindex < 3; pindex++)
+                    {
+                        var prodtype = pros[(index * 3) + pindex];
+                        Debug.WriteLine(prodtype.typename + " : " + index + " : " + pindex + " : " + ((index * 3) + pindex));
+                        var addProductTypeRowId = await ProductTypes.UpsertProductType(prodtype);
+                        if (addProductTypeRowId != 0)
+                        {
+                            var pt1Query = await ProductTypes.GetProductTypes();
+                            if (pt1Query != null && pt1Query.Count() > 0)
+                            {
+                                var pt1Res = pt1Query.Where(pt => pt.typename == prodtype.typename).FirstOrDefault();
+                                var li1 = new v_listitems
+                                    {
+                                        list_id = target.id,
+                                        producttype_id = pt1Res.id
+                                    };
+
+                                await ListItems.UpsertListItem(li1);
+                                if (prodtype.typename == "Dog food")
+                                {
+                                    //testRan = true;
+                                    StateHasChanged();
+
+                                }
+                            }
+                        }
+                    }
+
+
+                }
+            }
+        }
+    }
+
+}

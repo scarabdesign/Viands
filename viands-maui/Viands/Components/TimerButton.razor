@@ -1,0 +1,52 @@
+﻿@inherits RadzenButton
+@using System.Diagnostics;
+
+<RadzenButton 
+    Click=@NewOnClick
+    Text="@this.Text"
+    Icon="@this.Icon"
+    Image="@this.Image"
+    ButtonStyle="@this.ButtonStyle"
+    ButtonType="@this.ButtonType"
+    Variant="@this.Variant"
+    Shade="@this.Shade"
+    Size="@this.Size"
+    Disabled="@this.Disabled">
+        <span class="counter pie @(TimerStarted ? "animate_pie" : "hide")" ></span>
+        @ChildContent
+</RadzenButton>
+<style>
+    .pie {
+        --t: @(TimerTimeout)ms;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public EventCallback<MouseEventArgs> OnClickCallback { get; set; }
+
+    [Parameter]
+    public int TimerTimeout { get; set; } = 5000;
+
+    private bool TimerStarted = false;
+
+    protected async void NewOnClick(MouseEventArgs args)
+    {
+        if (Disabled) return;
+
+        await OnClickCallback.InvokeAsync(args);
+        await base.OnClick(args);
+
+        if (TimerTimeout > 0)
+        {
+            TimerStarted = true;
+            Disabled = true;
+            StateHasChanged();
+            await Task.Delay(TimerTimeout);
+            Disabled = false;
+            TimerStarted = false;
+            StateHasChanged();
+        }
+
+    }
+}

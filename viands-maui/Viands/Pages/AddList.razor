@@ -1,0 +1,1250 @@
+@page "/addlist"
+
+@using HtmlAgilityPack
+@using Newtonsoft.Json
+@using SQLite;
+@using System.Text.Json
+@using Viands.Data;
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+@using System.Diagnostics;
+@using static Viands.Support.GlobalCallbacks
+@using static Viands.Support.NavTools;
+@inject DialogService DialogService;
+@inject ContextMenuService ContextMenuService
+@implements IDisposable;
+@inject IJSRuntime JS;
+
+
+<input type="hidden" class="viands_menu_editor" />
+<RadzenColumn Size="12" SizeSM="6" class="inset_page">
+    <RadzenStack>
+        <div class="rz-form-field rz-variant-outlined" onfocusin="this.classList.add('rz-state-focused')" onfocusout="this.classList.remove('rz-state-focused')">
+            <div class="rz-form-field-content">
+                <input data-offset="35" class="rz-textbox rz-state-empty list_name" tabindex="0" id="list_name"
+                       autocomplete="off"
+                       @ref=@ListNameInput
+                       @bind-value="@ListName"
+                       @onblur=@(() => Validate())
+                       @onfocus=@(() => ScrollToElement(ListNameInput))
+                       @oninput=@((e) => MakeDirty(0, e.Value.ToString())) />
+                <i class="rz-color-danger error_message">@ListNameError</i>
+                <label class="rz-form-field-label rz-text-truncate">@ListType Name</label>
+            </div>
+        </div>
+        @if ((ListId == 0 && !IsTemplate && !IsProductSet) || NewFromTemplate)
+        {
+            <RadzenFormField Text="From Template" Variant="@Variant.Outlined">
+                <RadzenDropDown 
+                    Value=@ListId
+                    TValue="int"
+                    Change=@((args) => {
+                        NewFromTemplate = true;
+                        ListId = (int)args;
+                    })
+                    Data=@TemplateList
+                    TextProperty="Value"
+                    ValueProperty="Key" 
+                />
+            </RadzenFormField>
+        }
+        @if (ListType == ListTypeList)
+        {
+            <RadzenHtmlEditor 
+                    @bind-Value=@ListDescription
+                    class="list_desc"
+                    data-offset="100"
+                    @ref="MenuEditor"
+                    Change=@((val) => MakeDirty(1, val))
+                    Paste=@CheckPaste>
+                <label class="rz-form-field-label menu_editor_label">Menu Editor</label>
+                <RadzenHtmlEditorCustomTool>
+                    <Template Context="editor">
+                        <button @onclick=@UndoChange
+                                type="button" tabindex="-1" class="rz-html-editor-button undo_button" title="Undo" disabled>
+                            <i class="rzi">undo</i>
+                        </button>
+                    </Template>
+                </RadzenHtmlEditorCustomTool>
+                <RadzenHtmlEditorSeparator />
+                <RadzenHtmlEditorCustomTool>
+                    <Template Context="editor">
+                        <button @onclick=@OnCreateSet
+                                type="button" tabindex="-1" class="rz-html-editor-button" title="Create Set">
+                            <Blazicon Svg="MdiIcon.FormatListGroup" />
+                        </button>
+                    </Template>
+                </RadzenHtmlEditorCustomTool>
+                <RadzenHtmlEditorCustomTool>
+                    <Template Context="editor">
+                        <button @onclick=@OnCreateProductType
+                                type="button" tabindex="-1" class="rz-html-editor-button" title="Create Product">
+                            <Blazicon Svg="MdiIcon.FoodVariant" />
+                        </button>
+                    </Template>
+                </RadzenHtmlEditorCustomTool>
+                <RadzenHtmlEditorSeparator />
+                <RadzenHtmlEditorCustomTool>
+                    <Template Context="editor">
+                        <button @onclick=@SaveAllProducts
+                                type="button" tabindex="-1" class="rz-html-editor-button save_all_products" title="Save All Products" disabled>
+                            <Blazicon Svg="MdiIcon.ContentSave" />
+                        </button>
+                    </Template>
+                </RadzenHtmlEditorCustomTool>
+                <RadzenHtmlEditorCustomTool>
+                    <Template Context="editor">
+                        <button @onclick=@ImportAllSetsAndProducts
+                                type="button" tabindex="-1" class="rz-html-editor-button import_all_sets" title="Add All to List" disabled>
+                            <Blazicon Svg=GoogleMaterialOutlinedIcon.SaveAlt />
+                        </button>
+                    </Template>
+                </RadzenHtmlEditorCustomTool>
+                <RadzenHtmlEditorSeparator />
+                <RadzenHtmlEditorSource />
+            </RadzenHtmlEditor>
+            <div class="list_spacer" style="height: 900px"></div>
+        }
+
+        else
+        {
+            <RadzenFormField Text="Description" Variant="@Variant.Outlined">
+                <RadzenTextArea id="list_desc"
+                    class="list_desc"
+                    data-offset="100"
+                    autocomplete="off"
+                    @ref="ListDescInput"
+                    @bind-Value="@ListDescription"
+                    @onblur=@(() => {
+                        JS.InvokeVoidAsync("checkFocus");
+                        Validate();
+                    })
+                    @onfocus=@(() => ScrollToElement(ListDescInput.Element))
+                    @oninput=@((e) => MakeDirty(1, e.Value.ToString())) 
+                />
+                <i class="rz-color-danger error_message">@ListDescError</i>
+            </RadzenFormField>
+        }
+    </RadzenStack>
+</RadzenColumn>
+
+
+
+@code {
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "listid")]
+    public int ListId { get; set; }
+
+    [Parameter]
+    public string ListName { get; set; }
+
+    [Parameter]
+    public string ListDescription { get; set; }
+    private string listDescriptionOrig { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "template")]
+    public bool IsTemplate { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "copy")]
+    public bool CopyToTemplate { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "fromtemplate")]
+    public bool NewFromTemplate { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "productset")]
+    public bool IsProductSet { get; set; }
+
+    public List<KeyValuePair<int, string>> TemplateList { get; set; }
+    private IJSObjectReference AddListJS { get; set; }
+    private const string ListTypeTemplate = "Template";
+    private const string ListTypeSet = "Set";
+    private const string ListTypeList = "List";
+    private string ListType => IsTemplate ? ListTypeTemplate : IsProductSet ? ListTypeSet : ListTypeList;
+    private bool isDirty = false;
+    private string ListNameError { get; set; }
+    private string ListDescError { get; set; }
+    private ElementReference ListNameInput;
+    private RadzenHtmlEditor MenuEditor;
+    private RadzenTextArea ListDescInput;
+    private string NewSetName = "New Set";
+    private string LiveEditorContent;
+    private string ProductElementName = "productelement";
+    private string SetTitleElementName = "setelementtitle";
+    private List<VProductType> ParedResults = new List<VProductType>();
+    private bool ProductSelectorOpen = false;
+    private List<string> EditorUndoHistory = new List<string>();
+    private CancellationTokenSource EditorStateHasChangedToken;
+    private int HistoryPointer = -1;
+
+
+    [JSInvokable("UndoChange")]
+    public void UndoChange()
+    {
+        UndoToHistoryPoint(HistoryPointer - 1);
+    }
+
+    private void AddHistory(string currentContent)
+    {
+        EditorUndoHistory.Add(currentContent);
+        HistoryPointer = EditorUndoHistory.Count - 1;
+        AddListJS.InvokeVoidAsync("AdjustUndoButton", EditorUndoHistory.Count > 1);
+        Debug.WriteLine(HistoryPointer + " : " + EditorUndoHistory.Count + " : " + currentContent.Length + " : " + currentContent);
+    }
+
+    private void UndoToHistoryPoint(int historypoint)
+    {
+        if (historypoint < 0) return;
+        if (ListType == ListTypeList)
+        {
+            LiveEditorContent = EditorUndoHistory[historypoint];
+        }
+        ListDescription = EditorUndoHistory[historypoint];
+        EditorUndoHistory = EditorUndoHistory.Take(historypoint + 1).ToList();
+        HistoryPointer = historypoint;
+        StateHasChanged();
+        AddListJS.InvokeVoidAsync("AdjustUndoButton", EditorUndoHistory.Count > 1);
+        Debug.WriteLine(HistoryPointer + " : " + EditorUndoHistory.Count + " : " + ListDescription.Length + " : " + ListDescription);
+    }
+
+    private async Task<string> GetSelectedText()
+    {
+        var selection = await AddListJS.InvokeAsync<string>("GetSelectedText");
+        if (selection != null && !string.IsNullOrEmpty(selection.ToString()))
+        {
+            return new string(selection.ToString().Trim().Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c) || c == '-').ToArray());
+        }
+        return selection;
+    }
+
+    private async Task OnCreateProductType()
+    {
+        if (await ValidateAndSave())
+        {
+            try
+            {
+                await MenuEditor.FocusAsync();
+
+                var curProdInfo = await GetProductInfo();
+                var selection = await GetSelectedText();
+
+                string selectedText = null;
+                //if text highlighted
+                if (selection != null && !string.IsNullOrEmpty(selection.ToString().Trim()))
+                {
+                    await MenuEditor.ExecuteCommandAsync(HtmlEditorCommands.RemoveFormat);
+                    selectedText = selection.ToString();
+                }
+
+                //if not inside set, or inside new set
+                if (curProdInfo.SetId == 0 && string.IsNullOrEmpty(curProdInfo.SetName))
+                {
+                    //if not currently in product elem
+                    if (string.IsNullOrEmpty(curProdInfo.Name))
+                    {
+                        //insert new
+                        await InsertHTML(MakeProductElement(selectedText, 0, 0, false));
+                    }
+                }
+                else //if inside set
+                {
+                    //if inside title element
+                    if (curProdInfo.CurrentTarget == SetTitleElementName)
+                    {
+                        await AddListJS.InvokeVoidAsync("AddEmptyProductToSet", curProdInfo.SetId);
+                    }
+                    else
+                    {
+                        //if not product exists
+                        if (curProdInfo.ProductTypeId == 0)
+                        {
+                            //if text selected
+                            if (!string.IsNullOrEmpty(selectedText))
+                            {
+                                await AddListJS.InvokeVoidAsync("ReplaceSelectionWithNewProduct", curProdInfo.SetId);
+
+                            }
+                        }
+                    }
+
+                }
+
+                await AddListJS.InvokeVoidAsync("OpenSelectProducts");
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
+        }
+    }
+
+    private async Task<MenuItemResponse> GetProductInfo()
+    {
+        return (await AddListJS.InvokeAsync<MenuItemResponse>("GetCurrentProductInfo")) ?? new MenuItemResponse();
+    }
+
+    private async Task<MenuItemResponse> GetSetInfo()
+    {
+        return (await AddListJS.InvokeAsync<MenuItemResponse>("GetCurrentSetInfo")) ?? new MenuItemResponse();
+    }
+
+    private async Task OnCreateSet()
+    {
+        if (await ValidateAndSave())
+        {
+            try
+            {
+                await MenuEditor.FocusAsync();
+                var curProdInfo = await GetProductInfo();
+                var selection = await GetSelectedText();
+                if (selection != null && !string.IsNullOrEmpty(selection.ToString()) && curProdInfo.CurrentTarget == null)
+                {
+                    InsertNewProductSet(selection);
+                }
+                else
+                {
+                    GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.OpenSelectProductSets, new SelectSetRequest
+                    {
+                        ListId = ListId,
+                        ShowAddNew = true
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
+        }
+    }
+
+    [JSInvokable("ShowProductSelection")]
+    public async void ShowProductSelection(string JSONResult)
+    {
+        MenuItemResponse req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(JSONResult, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                IncludeFields = true
+            });
+
+        if (req == null) return;
+
+        var hasChanged = req.HasChanged == 1;
+        List<VProductType> resultList = null;
+
+        if ((string.IsNullOrEmpty(req.Name) || string.IsNullOrEmpty(req.Name.Trim())) || hasChanged)
+        {
+
+            resultList = await VProductType.GetProductTypeList(Support.Constants.SortTypes.Product, 1, 5);
+            if (hasChanged && !resultList.Any(p => p.Id == req.ProductTypeId))
+            {
+                var og = await VProductType.GetProductTypeById(req.ProductTypeId);
+                resultList.Insert(0, og);
+                resultList.RemoveAt(resultList.Count - 1);
+            }
+
+            if (resultList.Count == 0)
+            {
+                HideProductSelection();
+                return;
+            }
+        }
+        else
+        {
+            resultList = await VProductType.FilterProductTypes(req.Name);
+            if (resultList.Count == 0)
+            {
+                HideProductSelection();
+                return;
+            }
+        }
+
+        var pairedResults = resultList.Take(5).Select(r => VProductType.CloneProductType(r)).ToList();
+
+        pairedResults.ForEach(res =>
+        {
+            if (res.TypeName != null && res.TypeName.Length > 22)
+            {
+                res.TypeName = res.TypeName[..20] + "…";
+            }
+        });
+
+        var sameResult = pairedResults.Count == ParedResults.Count && pairedResults.All(r => ParedResults.Any(p => p.Id == r.Id));
+        if (sameResult && ProductSelectorOpen) return;
+
+        ParedResults = pairedResults;
+        var optList = ParedResults.Select(prod => new ContextMenuItem { Text = prod.TypeName, Value = prod.Id }).ToList();
+
+        ContextMenuService.Close();
+        ProductSelectorOpen = true;
+        ContextMenuService.OnClose += HideProductSelection;
+        ContextMenuService.Open(new MouseEventArgs() {
+            ClientX = req.X,
+            ClientY = req.Y + 20
+        }, optList, async selected => {
+            var name = selected.Text;
+            var id = selected.Value;
+            var target = resultList.FirstOrDefault(r => r.Id == int.Parse(selected.Value.ToString()));
+            if (target != null)
+            {
+                name = target.TypeName;
+                id = target.Id;
+            }
+            await AddListJS.InvokeVoidAsync("ReplaceCurrentProdutText", name, id, req.NewToSet == 1);
+            HideProductSelection();
+        });
+    }
+
+    [JSInvokable("HideProductSelection")]
+    public void HideProductSelection()
+    {
+        if (ContextMenuService != null)
+        {
+            ContextMenuService.OnClose -= HideProductSelection;
+            ContextMenuService.Close();
+        }
+        ParedResults = new List<VProductType>();
+        ProductSelectorOpen = false;
+    }
+
+
+    [JSInvokable("InsertEmptyProductType")]
+    public async void InsertEmptyProductType()
+    {
+        await InsertHTML(MakeProductElement(null, 0, 0, true));
+    }
+
+    private string MakeProductElement(string name, int setid = 0, int productid = 0, bool newToSet = false)
+    {
+        return "<productelement" +
+            " data-setid=" + setid +
+            " data-productid=" + productid +
+            (newToSet ? " data-newtoset=\"true\"" : "") +
+            " " + (name != null ? "data-og='" + name + "'" : null) +
+            ">" + (name != null ? "&nbsp;" + name + "&nbsp;" : "&nbsp;") +
+        "</productelement>";
+    }
+
+    private string MakeSetTitleElement(string name, int setid = 0)
+    {
+        return "<setelementtitle data-setid=" + setid + " " + (name != null ? "data-og='" + name + "'" : null) + ">&nbsp;" + name + "&nbsp;</setelementtitle>";
+    }
+
+    private string MakeSetElement(string name, int setid = 0)
+    {
+        return "" +
+            "<setelement data-setid=" + setid + " " + (setid == 0 && name == NewSetName ? "data-isnew=true" : null) + ">" +
+                MakeSetTitleElement(name, setid) +
+                MakeProductElement("", setid, 0, true) +
+            "</setelement>";
+    }
+
+    private string MakeWholeSet(string name, int setid = 0, List<ProductTypeBrief> list = null, bool addempty = false)
+    {
+        return "" +
+            "<setelement data-setid=" + setid + ">" +
+                MakeSetTitleElement(name, setid) +
+                (list != null && list.Count > 0 ? string.Join("", list.Select(li => MakeProductElement(li.ProductTypeName, setid, li.ProductTypeId))) : "") +
+                (addempty ? MakeProductElement(null, setid, 0, true) : null) +
+            "</setelement>";
+    }
+
+    private string WrapInSetElement(string childString, int setid = 0, bool addTitle = false)
+    {
+        return "<setelement data-setid=" + setid + ">" +
+            (addTitle ? MakeSetTitleElement(NewSetName) : "") +
+            childString + "</setelement>";
+    }
+
+    private void CheckPaste(HtmlEditorPasteEventArgs paste)
+    {
+
+        var doc = new HtmlDocument();
+        doc.LoadHtml(paste.Html);
+        var setelems = doc.DocumentNode.SelectNodes("//setelement");
+        var titles = doc.DocumentNode.SelectNodes("//setelementtitle");
+        var prods = doc.DocumentNode.SelectNodes("//productelement");
+
+        if ((prods != null && prods.Count > 0) && (setelems == null || setelems.Count == 0))
+        {
+            var addTitle = (titles == null || titles.Count == 0);
+            paste.Html = WrapInSetElement(paste.Html, 0, addTitle);
+        }
+        else
+        {
+            paste.Html = doc.DocumentNode.InnerText.Trim();
+        }
+    }
+
+    private void MakeDirty(int target, string input)
+    {
+        switch (target)
+        {
+            case 0:
+                ListNameError = null;
+                break;
+            case 1:
+                ListDescError = null;
+                break;
+        }
+
+        isDirty = !string.IsNullOrEmpty(input);
+    }
+
+    private bool Validate()
+    {
+        if (string.IsNullOrEmpty(ListName))
+        {
+            ListNameError = ListType + " name is required";
+            return false;
+        }
+
+        return true;
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            AddListJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/AddList.razor.js");
+            await AddListJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        if (ListId != 0)
+        {
+            var list = await Lists.GetList(ListId, await LoginUtils.GetCurrentUserApiKey());
+            var extra = string.IsNullOrEmpty(ListName) && NewFromTemplate ? " " + Utils.ShortDate(DateTime.Now) : null;
+            ListName = list.name + extra;
+            ListDescription = list.description;
+            listDescriptionOrig = list.description;
+            if (ListType == ListTypeList)
+            {
+                LiveEditorContent = list.description;
+            }
+            AddHistory(list.description);
+        }
+        else
+        {
+            var dateStr = DateTime.Now.ToString("ddd, dd MMM yyy");
+            var newName = ListType == ListTypeList ? dateStr : ListType == ListTypeTemplate ? "New Template " + dateStr : null;
+            ListName = newName != null ? await CheckName(newName) : null;
+        }
+        TemplateList = await VLists.GetTemplateSelection(await LoginUtils.GetCurrentUserApiKey());
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, (ListId == 0 ? "Create New " : "Edit ") + ListType);
+        StateHasChanged();
+        await Task.Delay(500);
+        if (ListType == ListTypeList)
+        {
+            await JS.InvokeVoidAsync("cursorToStart", ListNameInput);
+        }
+        if (ListType == ListTypeTemplate)
+        {
+            await JS.InvokeVoidAsync("highlightText", new object[3] { ListNameInput, 0, 12 });
+        }
+
+    }
+
+    private async Task<string> CheckName(string name, string originalName = null, int count = 0)
+    {
+        if (await Lists.ListNameExists(name, await LoginUtils.GetCurrentUserApiKey(), IsTemplate, IsProductSet))
+        {
+            ++count;
+            var newName = (originalName ?? name) + " (" + count + ")";
+            return await CheckName(newName, (originalName ?? name), count);
+        }
+
+        return name;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.WindowResized:
+                CheckWindowHeightForScroll();
+                break;
+            case GlobalCallbacks.CBKeys.CancelEdit:
+                Close(false);
+                break;
+            case GlobalCallbacks.CBKeys.SaveEdit:
+                ValidateSaveAndClose(false);
+                break;
+            case GlobalCallbacks.CBKeys.SaveAndAdd:
+                ValidateSaveAndClose(true);
+                break;
+            case GlobalCallbacks.CBKeys.ProductSetsSelected:
+                var setResponse = (args as GlobalCallbacks.ProductSetsSelectedResponse);
+                if (setResponse != null)
+                {
+                    ProductSetsSelected(setResponse);
+                }
+                break;
+            case GlobalCallbacks.CBKeys.ProductTypesSelected:
+                var productResponse = (args as GlobalCallbacks.ProductTypessSelectedResponse);
+                if (productResponse != null && productResponse.ProductTypeIds.Length > 0)
+                {
+                    ProductTypesSelected(productResponse.ProductTypeIds);
+                }
+                break;
+        }
+    }
+
+    private async Task InsertHTML(string html)
+    {
+        await MenuEditor.ExecuteCommandAsync(HtmlEditorCommands.InsertHtml, html);
+    }
+
+    private async void InsertNewProductSet(string name, bool selectText = false)
+    {
+        await InsertHTML(MakeSetElement(name));
+        if (selectText)
+        {
+            await AddListJS.InvokeVoidAsync("SelectNewSetName");
+        }
+    }
+
+    [JSInvokable("ProductElementClicked")]
+    public void ProductElementClicked(dynamic response)
+    {
+        MenuItemResponse req = null;
+        try
+        {
+            req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(response.ToString(), new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    IncludeFields = true
+                });
+
+            if (req == null) return;
+            if (string.IsNullOrEmpty(req.Name)) return;
+            var name = req.Name;
+            if (name.Length > 22)
+            {
+                name = req.Name[..20] + "…";
+            }
+
+            var productTypeId = req.ProductTypeId;
+            //var setName = req.SetName;
+            var setId = req.SetId;
+            var hasChanged = req.HasChanged == 1 ? true : false;
+            var newToSet = req.NewToSet == 1 ? true : false;
+
+            var optList = new List<ContextMenuItem>();
+            optList.Add(new ContextMenuItem { Text = name + ": Cancel" });
+            optList.Add(new ContextMenuItem { Text = "Remove Item", Value = 1 });
+            optList.Add(new ContextMenuItem { Text = "Replace Item", Value = 2 });
+
+            var saveOpt = false;
+            if (productTypeId == 0)
+            {
+                optList.Add(new ContextMenuItem { Text = "Save new Product", Value = 3 });
+                saveOpt = true;
+            }
+
+            if (hasChanged && productTypeId != 0)
+            {
+                optList.Add(new ContextMenuItem { Text = "Save Changes", Value = 4 });
+                optList.Add(new ContextMenuItem { Text = "Undo Changes", Value = 5 });
+                saveOpt = true;
+            }
+
+            if ((newToSet || productTypeId == 0) && setId != 0)
+            {
+                optList.Add(new ContextMenuItem { Text = (saveOpt ? "Save & " : "") + "Add to Set", Value = 6 });
+            }
+
+            if (req.UnimportedItemsCount > 0)
+            {
+                optList.Add(new ContextMenuItem { Text = (saveOpt ? "Save & " : "") + "Import into List", Value = 7 });
+            }
+
+            ContextMenuService.Close();
+            ContextMenuService.Open(new MouseEventArgs()
+                {
+                    ClientX = req.X,
+                    ClientY = req.Y + 20
+                }, optList,
+                async selected =>
+                {
+                    switch (selected.Value)
+                    {
+                        case 1:
+                            await AddListJS.InvokeVoidAsync("RemoveCurrentProductElem", productTypeId, setId);
+                            break;
+                        case 2:
+                            await AddListJS.InvokeVoidAsync("ReplaceProduct");
+                            break;
+                        case 3:
+                            var newProductTypeId = await VProductType.SaveProductType(name);
+                            await AddListJS.InvokeVoidAsync("CurrentProductTypeSaved", newProductTypeId, setId > 0);
+                            break;
+                        case 4:
+                            if (productTypeId > 0)
+                            {
+                                await VProductType.SaveProductType(name, productTypeId);
+                                await AddListJS.InvokeVoidAsync("CurrentProductTypeSaved", productTypeId, false);
+                            }
+                            break;
+                        case 5:
+                            await AddListJS.InvokeVoidAsync("UndoChangesToProductType", productTypeId);
+                            break;
+                        case 6:
+                            if (setId > 0)
+                            {
+                                if (saveOpt){
+                                    productTypeId = await VProductType.SaveProductType(name, productTypeId);
+                                }
+
+                                await VList.AddProductTypeToSet(setId, productTypeId);
+                                await AddListJS.InvokeVoidAsync("CurrentProductTypeSaved", productTypeId, false);
+                            }
+                            break;
+                        case 7:
+                            var listitemid = await VList.AddUpdateListItem(ListId, 0, productTypeId);
+                            await AddListJS.InvokeVoidAsync("UpdateProductsWithListIds", new Dictionary<int, int> { { productTypeId, listitemid } });
+                            break;
+                    }
+
+                    ContextMenuService.Close();
+                }
+            );
+        }
+        catch (Exception e)
+        {
+            Debug.WriteLine(e);
+        }
+    }
+
+    [JSInvokable("EditorStateHasChanged")]
+    public async void EditorStateHasChanged(string editorContent)
+    {
+
+        if (LiveEditorContent == editorContent) return;
+
+        try
+        {
+            if (EditorStateHasChangedToken != null)
+            {
+                EditorStateHasChangedToken.Cancel(false);
+            }
+            EditorStateHasChangedToken = new CancellationTokenSource();
+            await Task.Delay(500, EditorStateHasChangedToken.Token);
+            LiveEditorContent = editorContent;
+            AddHistory(editorContent);
+        }
+        catch { }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable("SetElementTitleClicked")]
+    public void SetElementTitleClicked(dynamic response)
+    {
+        MenuItemResponse req = null;
+        try
+        {
+            req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(response.ToString(), new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    IncludeFields = true
+                });
+
+            if (req == null) return;
+            if (string.IsNullOrEmpty(req.SetName)) return;
+
+            var setName = req.SetName;
+            if (setName.Length > 22)
+            {
+                setName = req.SetName[..20] + "…";
+            }
+
+            var setId = req.SetId;
+            var hasChanged = req.HasChanged == 1 ? true : false;
+            var setItemsDirty = req.SetItemsDirty == 1 ? true : false;
+
+            var optList = new List<ContextMenuItem>();
+            optList.Add(new ContextMenuItem { Text = setName + ": Cancel" });
+            optList.Add(new ContextMenuItem { Text = "Remove Set", Value = 1 });
+
+            if (hasChanged && setId != 0)
+            {
+                optList.Add(new ContextMenuItem { Text = "Save Title Changes", Value = 2 });
+                optList.Add(new ContextMenuItem { Text = "Undo Title Changes", Value = 3 });
+            }
+
+            var savemessage = string.Empty;
+            var savestrings = new List<string>();
+            var saveOpt = false;
+            if (setId == 0 || hasChanged)
+            {
+                savestrings.Add("Set");
+                saveOpt = true;
+            }
+            if (setItemsDirty)
+            {
+                savestrings.Add("All Items");
+                saveOpt = true;
+            }
+
+            if (saveOpt)
+            {
+                savemessage = "Save " + (string.Join(" & ", savestrings));
+            }
+
+            if (!string.IsNullOrEmpty(savemessage))
+            {
+                optList.Add(new ContextMenuItem { Text = savemessage, Value = 4 });
+            }
+
+            if (req.NewSetItemsCount > 0)
+            {
+                optList.Add(new ContextMenuItem { Text = (saveOpt ? "Save & " : "") + "Add Items to Set", Value = 5 });
+            }
+
+            if (req.HasUnimportedItems == 1)
+            {
+                optList.Add(new ContextMenuItem
+                {
+                    Text = (!string.IsNullOrEmpty(savemessage) ? savemessage + " and " : "") + "Import" + (string.IsNullOrEmpty(savemessage) ? " into List" : ""),
+                    Value = 6
+                });
+            }
+
+            ContextMenuService.Close();
+            ContextMenuService.Open(new MouseEventArgs()
+                {
+                    ClientX = req.X,
+                    ClientY = req.Y + 20
+                }, optList,
+                async selected =>
+                {
+                    switch (selected.Value)
+                    {
+                        case 1:
+                            await AddListJS.InvokeVoidAsync("RemoveCurrentSetElem", setId);
+                            break;
+                        case 2:
+                            if (setId > 0)
+                            {
+                                await VList.UpdateSetName(setId, setName, await LoginUtils.GetCurrentUserApiKey());
+                                await AddListJS.InvokeVoidAsync("SetSaved", setId);
+                            }
+                            break;
+                        case 3:
+                            await AddListJS.InvokeVoidAsync("UndoChangesToSetTitle", setId);
+                            break;
+                        case 4:
+                            ConfirmSaveSet(req);
+                            break;
+                        case 5:
+                            ConfirmAddItemsToSet(req);
+                            break;
+                        case 6:
+                            ImportAllInSet(req);
+                            break;
+                    }
+
+                    ContextMenuService.Close();
+                }
+            );
+        }
+        catch (Exception e)
+        {
+            Debug.WriteLine(e);
+        }
+    }
+
+    private async void ConfirmSaveSet(MenuItemResponse req)
+    {
+        var opener = "Save set";
+        if (req.SetId == 0)
+        {
+            opener = "Create new set";
+        }
+        var message = opener + " \"" + req.SetName +
+            (req.UnsavedProductCount > 0 ? "\" and save " + req.UnsavedProductCount + " product" + (req.UnsavedProductCount > 1 ? "s" : "") : "") +
+            "?";
+
+        var response = await DialogService.Confirm(
+            message, "Save Set & Items?",
+            new ConfirmOptions()
+            {
+                OkButtonText = "Save Set & Items",
+                CancelButtonText = "Cancel"
+            }
+        ) ?? false;
+
+        if (response && await ValidateAndSave())
+        {
+            var products = await AddListJS.InvokeAsync<List<MenuItemResponse>>("GetCurrentSetItems", req.SetId);
+            var productTypeIds = await VList.SaveSetAndItems(req.SetId, req.SetName, await LoginUtils.GetCurrentUserApiKey(), products);
+            await AddListJS.InvokeVoidAsync("ProductTypesSaved", productTypeIds.Item1, productTypeIds.Item2, false);
+        }
+    }
+
+    private async void ConfirmAddItemsToSet(MenuItemResponse req)
+    {
+        var opener = "";
+        if (req.SetId == 0)
+        {
+            opener = "Create new set" + " \"" + req.SetName + "\"";
+        } 
+        else if (req.HasChanged == 1)
+        {
+            opener = "Save set" + " \"" + req.SetName + "\"";
+        }
+        var willsave = !string.IsNullOrEmpty(opener);
+
+        var saveMessage = "";
+        if (req.UnsavedProductCount > 0)
+        {
+            saveMessage = (!willsave ? "Save " : ", save ") + req.UnsavedProductCount + " product" + (req.UnsavedProductCount > 1 ? "s" : "") + ", ";
+            willsave = true;
+        }
+
+        var importMessage = (willsave ? " and add " : "Add ") + req.NewSetItemsCount + " item" + (req.NewSetItemsCount > 1 ? "s" : "") + " to set";
+        var message = opener + saveMessage + importMessage + "?";
+
+        var response = await DialogService.Confirm(
+            message, (willsave ? "Save & ": "") + "Add Items?",
+            new ConfirmOptions()
+            {
+                OkButtonText = (willsave ? "Save & ": "") + "Add Items",
+                CancelButtonText = "Cancel"
+            }
+        ) ?? false;
+
+        if (response && await ValidateAndSave())
+        {
+            var products = await AddListJS.InvokeAsync<List<MenuItemResponse>>("GetCurrentSetItems", req.SetId);
+            var productTypeIds = await VList.SaveSetAndItems(req.SetId, req.SetName, await LoginUtils.GetCurrentUserApiKey(), products, true);
+            await AddListJS.InvokeVoidAsync("ProductTypesSaved", productTypeIds.Item1, productTypeIds.Item2, true);
+        }
+    }
+
+    private async void ImportAllInSet(MenuItemResponse req)
+    {
+        var opener = "";
+        if (req.SetId == 0)
+        {
+            opener = "Create new set" + " \"" + req.SetName + "\"";
+        }
+        else if (req.HasChanged == 1)
+        {
+            opener = "Save set" + " \"" + req.SetName + "\"";
+        }
+        var willsave = !string.IsNullOrEmpty(opener);
+
+        var saveMessage = "";
+        if (req.UnsavedProductCount > 0)
+        {
+            saveMessage = (!willsave ? "Save " : ", save ") + req.UnsavedProductCount + " product" + (req.UnsavedProductCount > 1 ? "s" : "") + ", ";
+            willsave = true;
+        }
+
+        var importMessage = (willsave ? " and import " : "Import ") + req.UnimportedItemsCount + " item" + (req.UnimportedItemsCount > 1 ? "s" : "") + " into list";
+        var message = opener + saveMessage + importMessage + "?";
+
+        var response = await DialogService.Confirm(
+            message, (willsave ? "Save & " : "") + "Import Items?",
+            new ConfirmOptions()
+            {
+                OkButtonText = (willsave ? "Save & " : "") + "Import Items",
+                CancelButtonText = "Cancel"
+            }
+        ) ?? false;
+
+
+        if (response && await ValidateAndSave())
+        {
+            if (willsave)
+            {
+                var products = await AddListJS.InvokeAsync<List<MenuItemResponse>>("GetCurrentSetItems", req.SetId);
+                var productTypeIds = await VList.SaveSetAndItems(req.SetId, req.SetName, await LoginUtils.GetCurrentUserApiKey(), products, false);
+                await AddListJS.InvokeVoidAsync("ProductTypesSaved", productTypeIds.Item1, productTypeIds.Item2, false);
+            }
+            
+            var prodidToListid = await VList.AddProductTypesToList(ListId, await AddListJS.InvokeAsync<Dictionary<int, int>>("GetProductIdsAndQuantitiesForCurrentSet"));
+            await AddListJS.InvokeVoidAsync("UpdateProductsWithListIds", prodidToListid);
+        }
+    }
+
+    [JSInvokable("SaveSet")]
+    public async Task<int> SaveSet(string JSONResult)
+    {
+        MenuItemResponse req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        if (req == null) return 0;
+        return await VList.SaveList(req.SetId, req.SetName, null, false, true, await LoginUtils.GetCurrentUserApiKey());
+    }
+
+    [JSInvokable("SaveProduct")]
+    public async Task<int> SaveProduct(string JSONResult)
+    {
+        MenuItemResponse req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        if (req == null) return 0;
+
+        return await VProductType.SaveProductType(req.Name, req.ProductTypeId);
+    }
+
+    [JSInvokable("SaveMenu")]
+    public async Task SaveMenu()
+    {
+        await SaveList();
+    }
+
+    [JSInvokable("AddProductToSet")]
+    public async Task<bool> AddProductToSet(string JSONResult)
+    {
+        MenuItemResponse req = System.Text.Json.JsonSerializer.Deserialize<MenuItemResponse>(JSONResult, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true
+        });
+
+        if (req == null) return false;
+
+        await VList.AddProductTypeToSet(req.SetId, req.ProductTypeId);
+
+        return true;
+    }
+
+    private async void ProductSetsSelected(GlobalCallbacks.ProductSetsSelectedResponse response)
+    {
+        var owner = await LoginUtils.GetCurrentUserApiKey();
+        var setList = await VLists.GetSetsBrief(owner, response.SetIds);
+        if (response.CreateNew)
+        {
+            setList.Add(new SetBrief
+            {
+                Order = 999,
+                SetName = null
+            });
+        }
+
+        var lastOne = setList.LastOrDefault();
+        var tagsList = setList.Select(set => MakeWholeSet(set.SetName, set.SetId, set.ProductList, set.SetId != 0 && set == lastOne));
+        var curProdInfo = await GetProductInfo();
+        if (curProdInfo.CurrentTarget != null)
+        {
+            await AddListJS.InvokeVoidAsync("CursorToBottom");
+        }
+        await InsertHTML(string.Join("<br /><br />", tagsList) + "<br />");
+        await AddListJS.InvokeVoidAsync("TriggerEditorUpdate");
+        await AddListJS.InvokeVoidAsync("SelectFirstEmptySet", lastOne.SetId);
+    }
+
+    private async void SaveAllProducts()
+    {
+        var message = "Save all new and changed sets and product types? New sets will have all assigned items added automatically.";
+        var response = await DialogService.Confirm(
+            message, "Save changes?",
+            new ConfirmOptions()
+            {
+                OkButtonText = "Save All",
+                CancelButtonText = "Cancel"
+            }
+        ) ?? false;
+
+        if (response && await ValidateAndSave())
+        {
+            await AddListJS.InvokeVoidAsync("SaveAllSetsAndProducts");
+        }
+    }
+
+    private async void ImportAllSetsAndProducts()
+    {
+        var message = "Import all products into the current list? " +
+            "<br>• Unsaved sets and items will be saved automatically." +
+            "<br>• New sets will have all assigned items added automatically." +
+            "<br>• Duplicate entries will add quantity to existing items in the list.";
+
+        var response = await DialogService.Confirm(
+            message, "Add items to list?",
+            new ConfirmOptions()
+            {
+                OkButtonText = "Import",
+                CancelButtonText = "Cancel"
+            }
+        ) ?? false;
+
+        if (response && await ValidateAndSave())
+        {
+            var prodidToListid = await VList.AddProductTypesToList(ListId, await AddListJS.InvokeAsync<Dictionary<int, int>>("GetProductIdsAndQuantities"));
+            await AddListJS.InvokeVoidAsync("UpdateProductsWithListIds", prodidToListid);
+        }
+    }
+
+    private async void ProductTypesSelected(int[] typeIds)
+    {
+        var owner = await LoginUtils.GetCurrentUserApiKey();
+        var productList = await ProductTypes.GetProductTypes(typeIds);
+        var tagsList = productList.Select(product => MakeProductElement(product.typename, ListId, product.id));
+        await InsertHTML(string.Join("  ", tagsList));
+    }
+
+    async void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        await JS.InvokeVoidAsync("tearDownGCBForNS", "AddList");
+    }
+
+    private async void CheckWindowHeightForScroll(int y = 0)
+    {
+        var windowSize = DisplayUtils.GetWindowSize();
+        if (windowSize.Height <= DisplayUtils.ScrollWhenHeightUnder)
+        {
+            if (y > 0)
+            {
+                await JS.InvokeAsync<string>("scrollToY", y);
+                return;
+            }
+            await JS.InvokeAsync<string>("scrollToFocusedElementAfterDelay");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("cancelScrollToElement");
+        }
+    }
+
+    private async void ScrollToElement(ElementReference input)
+    {
+        var windowSize = DisplayUtils.GetWindowSize();
+        if (windowSize.Height <= DisplayUtils.ScrollWhenHeightUnder)
+        {
+            await JS.InvokeVoidAsync("scrollToElement", input);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("cancelScrollToElement");
+        }
+
+    }
+
+    private async void ValidateSaveAndClose(bool addItems)
+    {
+        if (await ValidateAndSave())
+        {
+            Close(addItems);
+        }
+
+        StateHasChanged();
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    private async Task<bool> ValidateAndSave()
+    {
+        if (Validate())
+        {
+            await SaveList();
+            return true;
+        }
+        return false;
+    }
+
+    private async void Close(bool addItems = false)
+    {
+        await JS.InvokeVoidAsync("cancelScrollToElement");
+        if (isDirty)
+        {
+            var response = await DialogService.Confirm(
+                "You have unsaved changes", "Close?",
+                new ConfirmOptions()
+                    {
+                        OkButtonText = "Save changes",
+                        CancelButtonText = "Close and lose changes"
+                    }
+            );
+
+            if ((bool)(response ?? false))
+            {
+                //if save opt hit
+                if (!await ValidateAndSave())
+                {
+                    //if not valid
+                    return;
+                }
+            }
+
+            if (response == null)
+            {
+                //if x closer hit
+                return;
+            }
+
+            if (response == false)
+            {
+                //if canceled, undo changes;
+                ListDescription = listDescriptionOrig;
+                if (ListType == ListTypeList)
+                    LiveEditorContent = listDescriptionOrig;
+            }
+        }
+
+        if (addItems)
+        {
+            NavigateToListView(true);
+            return;
+        }
+
+        NavigateTo(IsTemplate ? VPageTypes.Templates : IsProductSet ? VPageTypes.ProductSets : VPageTypes.Home);
+    }
+
+    private void NavigateToListView(bool addNew)
+    {
+        NavigateTo(IsTemplate || CopyToTemplate ? VPageTypes.ViewTemplate :
+            IsProductSet ? VPageTypes.ViewProductSet : VPageTypes.ViewList,
+            "listid=" + ListId +
+                (IsTemplate && !NewFromTemplate ? "&template=true" : null) +
+                (IsProductSet ? "&productset=true" : null) +
+                (addNew ? "&addnew=true" : null)
+        );
+    }
+
+    private async Task SaveList()
+    {
+        if (CopyToTemplate)
+        {
+            if (ListId == 0) return; //can't copy to template if not yet saved. reassigned to new template id when saved
+            ListId = await VList.SaveListAsTemplate(ListId, ListName, ListType == ListTypeList ? LiveEditorContent : ListDescription, await LoginUtils.GetCurrentUserApiKey());
+            isDirty = false;
+            return;
+        }
+        if (NewFromTemplate)
+        {
+            if (ListId == 0) return; //List id here should be that of the template, then get's set to new list id on save
+            ListId = await VList.SaveTemplateToList(ListId, ListName, ListType == ListTypeList ? LiveEditorContent : ListDescription, await LoginUtils.GetCurrentUserApiKey());
+            isDirty = false;
+            return;
+        }
+
+        ListId = await VList.SaveList(
+            ListId, ListName, ListType == ListTypeList ? LiveEditorContent : ListDescription,
+            IsTemplate, IsProductSet, await LoginUtils.GetCurrentUserApiKey()
+        );
+        isDirty = false;
+    }
+}

@@ -1,0 +1,150 @@
+
+
+::deep .inline-link svg {
+    background-color: #9ACD32;
+    color: white;
+    font-size: 3rem;
+    border-radius: 2rem;
+    padding: 6px;
+    display: inline-block;
+}
+
+::deep .inline-link {
+    cursor: pointer;
+    transition: opacity 300ms linear;
+    border-radius: 30px;
+    background-color: #f1f1f1;
+    text-decoration: none;
+    line-height: 30px;
+    padding: 2px 2px 0 1rem;
+}
+
+::deep .inline-link:active svg,
+::deep .inline-link svg:active {
+    scale: 95%;
+}
+
+::deep .inline-link label {
+    color: black;
+    font-weight: bold;
+    line-height: 50px;
+    vertical-align: top;
+}
+
+.control_container {
+    float: right;
+}
+
+::deep .sidebar-link {
+    cursor: pointer;
+}
+
+.logout_container {
+    line-height: 3rem;
+}
+
+::deep .sidebar-link svg {
+    font-size: 3rem;
+    color: white;
+    background-color: #9ACD32;
+    border-radius: 2rem;
+    padding: 6px;
+    display: inline-block;
+}
+
+.setting_section {
+    clear: both;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ebebeb;
+}
+
+::deep .rz-slider-handle {
+    background-color: #9ACD32 !important
+}
+
+.expander {
+    width: 0;
+    height: 0;
+    background-color: transparent;
+    border-style: solid;
+    cursor: pointer;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.expander.down {
+    border-width: 15px 10px 0px 10px;
+    border-color: #9ACD32 transparent transparent transparent;
+    border-bottom: 5px;
+}
+
+.expander.left {
+    border-width: 10px 0px 10px 15px;
+    border-color: transparent transparent transparent #9ACD32;
+    margin: 0 1px 4px 4px;
+}
+
+.backup_panel_head {
+    text-align: right;
+    margin: 10px 0;
+}
+
+.backup_panel_head ::deep button {
+    display: inline-block;
+    background-color: #9ACD32 !important;
+}
+
+.backup_selection {
+    display: flex;
+    justify-content: space-between
+}
+
+.backup_selection_name {
+    color: #9ACD32;
+    text-decoration: underline;
+    line-height: 40px;
+    cursor: pointer;
+}
+
+.delete_backup_container ::deep button {
+    background: #9ACD32 !important;
+}
+
+.delete_backup_container span {
+    line-height: 2rem;
+    margin-right: 10px;
+}
+
+::deep .cloud_sync_button_container.cloud_success button {
+    background-color: green !important;
+}
+
+::deep .cloud_sync_button_container.local_failed button,
+::deep .cloud_sync_button_container.cloud_failed button {
+    background-color: red !important;
+}
+
+::deep .cloud_sync_button_container.local_success button {
+    background-color: lightgray !important;
+}
+
+::deep .cloud_sync_button_container.remote_database button {
+    background-color: lightblue !important;
+}
+
+.backup_list {
+    margin-top: 10px;
+}
+
+::deep .backup_to_server_label {
+    margin-left: 8px;
+    vertical-align: middle;
+    font-size: 12px;
+    margin-left: 0px;
+}
+
+::deep .show_tools_helper .rz-state-active,
+::deep .backup_to_server .rz-state-active {
+    background-color: #9ACD32;
+}

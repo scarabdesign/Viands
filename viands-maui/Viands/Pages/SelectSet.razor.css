@@ -1,0 +1,107 @@
+
+.modaltop_buttons {
+    position: absolute;
+    z-index: 10;
+    right: 2px;
+    top: 0px;
+    left: 2px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    background-color: white;
+    padding-top: 2px;
+}
+
+.setlist ::deep .rz-chkbox-box.rz-state-active {
+    background-color: #9ACD32 !important;
+}
+
+::deep .filter_sets_container {
+    position: absolute;
+    top: 29px;
+    left: 18px;
+    right: 32px;
+    pointer-events: all;
+}
+
+.modaltop_buttons h5 {
+    margin: 6px 0 0 10px;
+}
+
+.setlist.show_filter {
+    margin-top: 60px;
+}
+
+.setlist {
+    margin-top: 25px;
+    border: 1px solid lightgray;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+.setlist .lists_item:last-child {
+    border-bottom: 0 !important;
+}
+
+.setlist .lists_item {
+    margin: -3px 0 0 0;
+    display: block;
+    border-bottom: 1px solid lightgray;
+    line-height: 32px;
+}
+
+.modaltop_buttons .sidebar-link {
+    display: inline-block;
+    pointer-events: auto;
+    padding: 0 0.1rem;
+}
+
+.modaltop_buttons .sidebar-link ::deep svg {
+    font-size: 2.2rem;
+}
+
+.inline-link {
+    margin-top: 3px;
+}
+
+.inline-link ::deep svg,
+::deep .sidebar-link.highlight_green svg {
+    background-color: #9ACD32;
+    color: white;
+}
+
+.inline-link,
+::deep .sidebar-link {
+    cursor: pointer;
+    padding: 0.1rem 0.2rem;
+    transition: opacity 300ms linear;
+}
+
+.inline-link.hidden,
+::deep .sidebar-link.hidden {
+    opacity: 0;
+    position: absolute;
+    pointer-events: none;
+    z-index: 90;
+}
+
+.inline-link:active,
+::deep .sidebar-link:active {
+    scale: 0.95;
+}
+
+.inline-link ::deep svg,
+::deep .sidebar-link svg {
+    font-size: 2.5rem;
+    border-radius: 2rem;
+    padding: 6px;
+    display: inline-block;
+}
+
+::deep .filtersets_button,
+::deep .saveselections_button,
+::deep .multiple_button,
+::deep .close_button {
+    background-color: #e1e1e1;
+    color: inherit;
+}

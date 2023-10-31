@@ -1,0 +1,78 @@
+@page "/managedata"
+@using Viands.Support;
+@using static Viands.Support.NavTools;
+@implements IDisposable
+
+<div class="page management_page">
+    <RadzenCard class="p-0">
+        <RadzenStack Orientation="Orientation.Vertical" Gap="10px">
+            <a 
+                class="inline-link"
+                @onclick=@(() => NavTools.NavigateTo(VPageTypes.EditLocations))>
+                <Blazicon 
+                    Svg=MdiIcon.Store
+                    class="management_button"
+                    title="Manage Locations"
+                />
+                <label>Locations</label>
+            </a>
+            <a 
+                class="inline-link"
+                @onclick=@(() => NavTools.NavigateTo(VPageTypes.EditProducts))>
+                <Blazicon 
+                    Svg=MdiIcon.FoodVariant
+                    class="management_button"
+                    title="Manage Products"
+                />
+                <label>Products</label>
+            </a>
+            <a 
+                class="inline-link"
+                @onclick=@(() => NavTools.NavigateTo(VPageTypes.Templates))>
+                <Blazicon 
+                    Svg=GoogleMaterialOutlinedIcon.Checklist
+                    class="management_button"
+                    title="Manage Templates"
+                />
+                <label>Templates</label>
+            </a>
+            <a 
+                class="inline-link"
+                @onclick=@(() => NavTools.NavigateTo(VPageTypes.ProductSets))>
+                <Blazicon 
+                    Svg=MdiIcon.FormatListGroupPlus
+                    class="management_button"
+                    title="Product Sets"
+                />
+                <label>Product Sets</label>
+            </a>
+        </RadzenStack>
+    </RadzenCard>
+</div>
+
+@code {
+
+    protected override void OnInitialized()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        base.OnInitialized();
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.SetTitle, "Manage Data");
+    }
+
+    void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    private void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+        }
+    }
+
+}

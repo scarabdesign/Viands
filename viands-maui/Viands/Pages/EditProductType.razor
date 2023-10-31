@@ -1,0 +1,762 @@
+@page "/editproducttype"
+@using System.Diagnostics;
+@using Viands.Components
+@using Viands.Data.ViewModels;
+@using Viands.Support;
+
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@implements IDisposable
+@preservewhitespace false
+
+<div class="producttype_buttons @(DisplayUtils.ShowEditorButtonTitles ? "titles_showing" : null)">
+    <span class="producttype_buttons_left">
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.AddProduct, AddNewProductType, 
+            ProductTypeId == 0 || isDirty
+        ) />
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.ScanBarcode, ScanBarcode
+        ) />
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.ShowButtonTitles
+        ) />
+    </span>
+    <span class="producttype_buttons_right">
+        @if(showSaveButton)
+        {
+            <NavToolButton NavTool=@NavTools.GetEditorTool(
+                NavTools.ToolTypes.FinishEditProduct,
+                SaveProductTypeInfo, !isDirty, isDirty ? "savable" : null
+            ) />
+        }
+        <span class="joined_buttons">
+
+            <NavToolButton NavTool=@NavTools.GetEditorTool(
+                NavTools.ToolTypes.EditorPrevButton,
+                GoPrev, !CanGoPrev()
+            ) />
+            <NavToolButton NavTool=@NavTools.GetEditorTool(
+                NavTools.ToolTypes.EditorNextButton,
+                GoNext, !CanGoNext()
+            ) />
+        </span>
+        <NavToolButton NavTool=@NavTools.GetEditorTool(
+            NavTools.ToolTypes.EditorCloseButton, CloseDialog
+        ) />
+    </span>
+</div>
+
+<span @ref=ScrollTo[0]></span>
+<h5>@(ProductTypeId == 0 ? "Add" : "Edit") Product Type</h5>
+<RadzenColumn Size="12" SizeSM="6">
+    <RadzenStack Gap="8px">
+        <span @ref=ScrollTo[1] ></span>
+            @if (ListId != 0)
+            {
+                <RadzenRow Orientation="Orientation.Horizontal" Gap="10px">
+                    <RadzenColumn Size="8">
+                        <RadzenFormField Variant="@Variant.Outlined" Text="Name" Style="width: 100%">
+                            <span class="rz-spinner">
+                                <RadzenTextBox
+                                    class="edit_producttype_input"
+                                    @bind-Value="@ProductTypeInfo.TypeName"
+                                    @onblur=@(() => CheckInputFocus(-1))
+                                    @onfocus=@(() => CheckInputFocus(0))
+                                    @oninput=@((e) => {
+                                        ClearError(0);
+                                        ProductTypeInfo.TypeName = e.Value.ToString();
+                                        MarkDirtyOrSave();
+                                    })
+                                />
+                            </span>
+                            <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(0) ? InputErrors[0] : null)</i>
+                        </RadzenFormField>
+                    </RadzenColumn>
+                    <RadzenColumn Size="4">
+                        <RadzenFormField Variant="@Variant.Outlined" Text="Quantity">
+                            <RadzenNumeric 
+                                class="edit_producttype_input short"
+                                TValue="int"
+                                Change=@((val) => {
+                                    if(val < 1)
+                                    {
+                                        val = 1;
+                                    }
+                                    Quantity = val;
+                                    MarkDirtyOrSave();
+                                })
+                                @bind-Value="@Quantity"
+                                @onblur=@(() => CheckInputFocus(-1))
+                                @onfocus=@(() => CheckInputFocus(0))
+                                @onkeydown=@(() => {
+                                   MarkDirtyOrSave();
+                                })
+                            />
+                        </RadzenFormField>
+                    </RadzenColumn>
+                </RadzenRow>
+            }
+            else
+            {
+                <RadzenFormField Variant="@Variant.Outlined" Text="Name">
+                    <RadzenTextBox
+                        @bind-Value="@ProductTypeInfo.TypeName"
+                        class="edit_producttype_input"
+                        @onblur=@(() => CheckInputFocus(-1))
+                        @onfocus=@(() => CheckInputFocus(0))
+                        @oninput=@((e) => {
+                            ClearError(0);
+                            ProductTypeInfo.TypeName = e.Value.ToString();
+                            MarkDirtyOrSave();
+                        }) 
+                    />
+                    <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(0) ? InputErrors[0] : null)</i>
+                </RadzenFormField>
+            }
+        <span @ref=ScrollTo[2]></span>
+        <RadzenRow Orientation="Orientation.Horizontal" Gap="10px">
+            <RadzenColumn Size="8">
+                <RadzenFormField Variant="@Variant.Outlined" Text="Price">
+                    @if (ProductTypeInfo.Price != null)
+                    {
+                        <span class="rz-spinner producttype_price_container">
+                            <input 
+                                step="0.01"
+                                type="number" 
+                                inputmode="decimal" 
+                                autocomplete="off" 
+                                class="edit_producttype_input producttype_price" 
+                                data-isZero="@(ProductTypeInfo.Price.Price == 0 ? "true" : "false")"
+                                value=@ProductTypeInfo.Price.Price.ToString("0.00")
+                                @onblur=@(() => CheckInputFocus(-1))
+                                @onfocus=@(() => CheckInputFocus(1))
+                            >
+                        </span>
+                    }
+                </RadzenFormField>
+            </RadzenColumn>
+            <RadzenColumn Size="4">
+                <RadzenFormField Variant="@Variant.Outlined" Text="Unit">
+                    @if (ProductTypeInfo.Price != null)
+                    {
+                        <RadzenTextBox 
+                            @bind-Value="@ProductTypeInfo.Price.PerUnitType"
+                            class="edit_producttype_input short"
+                            @onblur=@(() => CheckInputFocus(-1))
+                            @onfocus=@(() => CheckInputFocus(1))
+                            @oninput=@((e) => {
+                                ClearError(1);
+                                ProductTypeInfo.Price.PerUnitType = e.Value.ToString();
+                                MarkDirtyOrSave();
+                            })
+                        />
+                    }
+                    <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(1) ? InputErrors[1] : null)</i>
+                </RadzenFormField>
+            </RadzenColumn>
+        </RadzenRow>
+        <span @ref=ScrollTo[3]></span>
+        <RadzenRow Orientation="Orientation.Horizontal" Gap="1px">
+            <RadzenColumn Size="9">
+                <RadzenFormField Variant="@Variant.Outlined" Text="Product Size">
+                    @if (ProductTypeInfo.Price != null)
+                    {
+                        <span class="rz-spinner producttype_size_container">
+                            <RadzenTextBox 
+                                @bind-Value="@ProductTypeInfo.Price.ProductSize"
+                                class="edit_producttype_input producttype_size"
+                                @onblur=@(() => CheckInputFocus(-1))
+                                @onfocus=@(() => CheckInputFocus(2))
+                                @oninput=@((e) => {
+                                    ClearError(2);
+                                    ProductTypeInfo.Price.ProductSize = e.Value.ToString();
+                                    MarkDirtyOrSave();
+                                })
+                            />
+                        </span>
+                    }
+                    <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(2) ? InputErrors[2] : null)</i>
+                </RadzenFormField>
+            </RadzenColumn>
+            <RadzenColumn Size="3">
+                @if (ProductTypeInfo.Price != null)
+                {
+                    <div class="producttype_onsale_container">
+                        <RadzenLabel Text="On sale" Component="OnSaleCheck" />
+                        <RadzenCheckBox 
+                            TValue="bool"
+                            @bind-Value=@ProductTypeInfo.Price.OnSale
+                            Name="OnSaleCheck"
+                            class="edit_producttype_input producttype_onsale"
+                            Change=@(() => MarkDirtyOrSave())
+                        />
+                    </div>
+                }
+            </RadzenColumn>
+        </RadzenRow>
+        <span @ref=ScrollTo[4]></span>
+        <RadzenRow Orientation="Orientation.Horizontal" Gap="1px">
+            <RadzenColumn Size="10">
+                <RadzenFormField Variant="@Variant.Outlined" Text="Location">
+                    @if (ProductTypeInfo.Location != null)
+                    {
+                        <span class="rz-spinner producttype_location_container">
+                            <RadzenDropDown 
+                                class="edit_producttype_input producttype_location"
+                                TextProperty="Name"
+                                ValueProperty="Id"
+                                @bind-Value="@ProductTypeInfo.LocationId"
+                                Data=@LocationsList
+                                Change=@((val) => {
+                                    ClearError(3);
+                                    ProductTypeInfo.LocationId = (int)val;
+                                    MarkDirtyOrSave();
+                                }) 
+                            />
+                        </span>
+                    }
+                    <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(3) ? InputErrors[3] : null)</i>
+                </RadzenFormField>
+            </RadzenColumn>
+            <RadzenColumn Size="2">
+                <a class="nav-link inline-link new_location_button">
+                    <Blazicon 
+                        Svg=MdiIcon.StorePlus
+                        title="New Location"
+                        @onclick=@AddNewLocation
+                    />
+                </a>
+            </RadzenColumn>
+        </RadzenRow>
+        <span @ref=ScrollTo[5] id="producttype_location_scrollto"></span>
+        <RadzenFormField Variant="@Variant.Outlined" Text="Notes">
+            <RadzenTextArea 
+                @bind-Value="@ProductTypeInfo.Notes"
+                class="edit_producttype_input"
+                @onblur=@(() => CheckInputFocus(-1))
+                @onfocus=@(() => CheckInputFocus(4))
+                @oninput=@((e) => {
+                    ClearError(4);
+                    ProductTypeInfo.Notes = e.Value.ToString();
+                    MarkDirtyOrSave();
+                }) 
+            />
+            <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(4) ? InputErrors[4] : null)</i>
+        </RadzenFormField>
+        <span @ref=ScrollTo[6]></span>
+        <RadzenFormField Variant="@Variant.Outlined" Text="Brand">
+            @if (ProductTypeInfo.Product != null)
+            {
+                <RadzenTextBox 
+                    @bind-Value="@ProductTypeInfo.Product.Brandname"
+                    class="edit_producttype_input"
+                    @onblur=@(() => CheckInputFocus(-1))
+                    @onfocus=@(() => CheckInputFocus(5))
+                    @oninput=@((e) => {
+                        ClearError(5);
+                        ProductTypeInfo.Product.Brandname = e.Value.ToString();
+                        MarkDirtyOrSave();
+                    })
+                />
+            }
+            <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(5) ? InputErrors[5] : null)</i>
+        </RadzenFormField>
+        <span @ref=ScrollTo[7]></span>
+        
+            @if (ProductTypeInfo.Product != null)
+            {
+                <RadzenFormField Variant="@Variant.Outlined" Text="UPC">
+                    <ChildContent>
+                        <RadzenTextBox 
+                            @bind-Value="@ProductTypeInfo.Product.UPC"
+                            class="edit_producttype_input"
+                            @onblur=@(() => CheckInputFocus(-1))
+                            @onfocus=@(() => CheckInputFocus(6))
+                            @oninput=@((e) => {
+                                ClearError(6);
+                                ProductTypeInfo.Product.UPC = e.Value.ToString();
+                                MarkDirtyOrSave();
+                            })   
+                        />
+                        <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(6) ? InputErrors[6] : null)</i>
+                    </ChildContent>
+                    <End>
+                        <TimerButton Variant="Variant.Text" OnClickCallback=@ScanBarcodeForUPC Size="ButtonSize.Small">
+                            <Blazicon Svg=MdiIcon.BarcodeScan style="font-size: 1.5rem; color: black" />
+                        </TimerButton>
+                    </End>
+                </RadzenFormField>
+            }
+
+        <RadzenFormField Variant="@Variant.Outlined" Text="Brand Description">
+            @if (ProductTypeInfo.Product != null)
+            {
+                <RadzenTextArea 
+                    @bind-Value="@ProductTypeInfo.Product.Description"
+                    class="edit_producttype_input"
+                    @onblur=@(() => CheckInputFocus(-1))
+                    @onfocus=@(() => CheckInputFocus(7))
+                    @oninput=@((e) => {
+                        ClearError(7);
+                        ProductTypeInfo.Product.Description = e.Value.ToString();
+                        MarkDirtyOrSave();
+                    }) 
+                />
+            }
+            <i class="rz-color-danger error_message">@(InputErrors.ContainsKey(7) ? InputErrors[7] : null)</i>
+        </RadzenFormField>
+    </RadzenStack>
+</RadzenColumn>
+
+<div id="form_spacer" style="height:200px"></div>
+
+
+@code {
+
+    [Parameter]
+    public int ProductTypeId { get; set; }
+
+    [Parameter]
+    public int ListItemId { get; set; }
+
+    [Parameter]
+    public int ListId { get; set; }
+
+    [Parameter]
+    public int Quantity { get; set; } = 1;
+
+    [Parameter]
+    public string UPC { get; set; }
+
+    [Parameter]
+    public bool IsFirst { get; set; }
+
+    [Parameter]
+    public bool IsLast { get; set; }
+
+    [Parameter]
+    public bool FromBarcode { get; set; }
+
+    private VProductType ProductTypeInfo { get; set; } = new VProductType();
+    private Dictionary<int, ElementReference> ScrollTo = new Dictionary<int, ElementReference>();
+    private Dictionary<int, string> InputErrors = new Dictionary<int, string>();
+    private IJSObjectReference EditProductTypeJS { get; set; }
+    private List<VLocation> LocationsList = new List<VLocation>();
+    private bool highlightTypeNameText = false;
+    private bool jsModLoaded = false;
+    private bool isDirty = false;
+    private bool showSaveButton = false;
+
+    private bool CanGoNext()
+    {
+        if (!IsLast) return true;
+        return false;
+    }
+
+    private bool CanGoPrev()
+    {
+        if (IsFirst) return false;
+        if (ProductTypeId == 0) return false;
+        return true;
+    }
+
+    private async void GoNext(dynamic args)
+    {
+        if (CanGoNext())
+            await GoNextPrev(GlobalCallbacks.CBKeys.EditNextProductType);
+    }
+
+    private async void GoPrev(dynamic args)
+    {
+        if(CanGoPrev())
+            await GoNextPrev(GlobalCallbacks.CBKeys.EditPrevProductType);
+    }
+
+    private async Task GoNextPrev(GlobalCallbacks.CBKeys type)
+    {
+        if (await CheckDirtyAndSave())
+        {
+            GlobalCallbacks.Trigger(type, new GlobalCallbacks.EditProductTypeResponse
+            {
+                ProductTypeId = ProductTypeId,
+                ListItemId = ListItemId,
+                Quantity = Quantity
+            });
+        } 
+    }
+
+    private string InputError(int index)
+    {
+        return InputErrors[index];
+    }
+
+    private void ClearError(int index)
+    {
+        if (InputErrors.ContainsKey(index))
+        {
+            InputErrors[index] = null;
+            StateHasChanged();    
+        }
+    }
+
+    private async void ScanBarcode(dynamic args)
+    {
+        if (await CheckDirtyAndSave())
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.CloseDialog, null);
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditProductTypeByUPC, new GlobalCallbacks.EditProductTypeResponse
+            {
+                ListId = ListId
+            });
+        }
+    }
+
+    private void ScanBarcodeForUPC()
+    {
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RequestUPCForProductType, null);
+    }
+
+    private void AddNewProductType(dynamic args)
+    {
+        if (ProductTypeId == 0 || isDirty) return;
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditProductType, new GlobalCallbacks.EditProductTypeResponse
+        {
+            ProductTypeId = 0,
+            IsFirst = false,
+            IsLast = true,
+            Quantity = 1,
+            ListId = ListId
+        });
+    }
+
+    private void AddNewLocation()
+    {
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditLocation, new GlobalCallbacks.EditLocationResponse
+        {
+            LocationId = 0,
+            Singleton = true,
+            IsFirst = true,
+            IsLast = false,
+            AddEdit = true
+        });
+    }
+
+    private async void CloseDialog(dynamic args)
+    {
+        if (await CheckDirtyAndSave())
+        {
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.RefreshLists, null);
+            GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.CloseDialog, null);
+        }
+    }
+
+    private async Task StoreCurrentQuantity()
+    {
+        if (ListItemId > 0 && Quantity > 0)
+        {
+            await VListItem.SetListItemQuantity(ListItemId, Quantity);
+        }
+    }
+
+    private async void HandleEvent(GlobalCallbacks.CBKeys key, dynamic args)
+    {
+        switch (key)
+        {
+            case GlobalCallbacks.CBKeys.RefreshState:
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.EditProductType:
+                var editproducttyperesponse = (args as GlobalCallbacks.EditProductTypeResponse);
+                ProductTypeId = editproducttyperesponse.ProductTypeId;
+                ListItemId = editproducttyperesponse.ListItemId;
+                ListId = editproducttyperesponse.ListId;
+                IsFirst = editproducttyperesponse.IsFirst;
+                IsLast = editproducttyperesponse.IsLast;
+                Quantity = editproducttyperesponse.Quantity;
+                UPC = editproducttyperesponse.UPC;
+                await BuildProductTypeInfo();
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.NewLocationAdded:
+                ProductTypeInfo.LocationId = (int)args;
+                MarkDirtyOrSave();
+                await BuildLocationsList();
+                StateHasChanged();
+                break;
+            case GlobalCallbacks.CBKeys.ResponseUPCForProductType:
+                var upcResponse = (args as GlobalCallbacks.EditProductTypeResponse);
+                if (upcResponse != null && !string.IsNullOrEmpty(upcResponse.UPC))
+                {
+
+                    ProductTypeInfo.Product.UPC = upcResponse.UPC;
+                    MarkDirtyOrSave();
+                }
+                break;
+            case GlobalCallbacks.CBKeys.ShowEditorButtonTitles:
+            case GlobalCallbacks.CBKeys.HideEditorButtonTitles:
+                StateHasChanged();
+                break;
+        }
+    }
+
+    new private void StateHasChanged()
+    {
+        this.InvokeAsync(() => base.StateHasChanged());
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+        GlobalCallbacks.OnTriggerCallback += HandleEvent;
+        await BuildProductTypeInfo();
+        await base.OnInitializedAsync();
+    }
+
+    [JSInvokable("StoreCurrentPrice")]
+    public async void StoreCurrentPrice()
+    {
+        var price = await EditProductTypeJS.InvokeAsync<dynamic>("GetPriceValue");
+        ProductTypeInfo.Price.Price = Convert.ToDecimal(price.ToString());
+        MarkDirtyOrSave();
+    }
+
+    private async Task BuildLocationsList()
+    {
+        LocationsList = await VLocation.GetAllLocations();
+    }
+
+    private async Task BuildProductTypeInfo()
+    {
+        try
+        {
+            await BuildLocationsList();
+
+            if (FromBarcode && ListId > 0 && UPC != null)
+            {
+                var listItem = await VListItem.GetListItemByUPC(ListId, UPC);
+                if(listItem != null)
+                {
+                    ProductTypeId = listItem.ProductTypeId;
+                    ListItemId = listItem.Id;
+                    Quantity = listItem.Quantity;
+                }
+                else
+                {
+                    showSaveButton = true;
+                    isDirty = true;
+                }
+            }
+
+            if(ProductTypeId == 0 && UPC != null)
+            {
+                var existingFromUPC = await VProductType.GetProductTypesByUPC(UPC);
+                if (existingFromUPC != null && existingFromUPC.Count > 0)
+                {
+                    ProductTypeId = existingFromUPC[0].Id;
+                }
+                else
+                {
+                    showSaveButton = true;
+                    isDirty = true;
+                }
+            }
+
+            if (Quantity == 0) Quantity = 1;
+
+            ProductTypeInfo = await VProductType.Init(ProductTypeId);
+
+            VProduct fetchedPrductInfo = null;
+
+            if (ProductTypeInfo.ProductId == 0)
+            {
+                if (UPC != null)
+                {
+                    fetchedPrductInfo = await VProduct.GetProductByUPC(UPC, 0, false);
+                    ProductTypeInfo.Product = fetchedPrductInfo ?? new VProduct();
+                    ProductTypeInfo.ProductId = ProductTypeInfo.Product.Id;
+
+                    if (fetchedPrductInfo != null &&
+                        string.IsNullOrEmpty(ProductTypeInfo.TypeName) &&
+                        !string.IsNullOrEmpty(fetchedPrductInfo.FetchedName)
+                    )
+                    {
+                        ProductTypeInfo.TypeName = fetchedPrductInfo.FetchedName;
+                        highlightTypeNameText = true;
+                    }
+
+                    MarkDirtyOrSave();
+                }
+                else
+                {
+                    ProductTypeInfo.Product = new VProduct();
+                }
+            }
+            if (ProductTypeInfo.LocationId == 0)
+            {
+                ProductTypeInfo.Location = new VLocation();
+            }
+            if (ProductTypeInfo.PriceId == 0)
+            {
+                ProductTypeInfo.Price = new VPrice();
+            }
+
+            if (UPC != null && ProductTypeInfo.Product.UPC == null)
+            {
+                ProductTypeInfo.Product.UPC = UPC;
+                MarkDirtyOrSave();
+            }
+
+            if (ProductTypeInfo.Price != null &&
+                string.IsNullOrEmpty(ProductTypeInfo.Price.ProductSize) &&
+                fetchedPrductInfo != null && 
+                !string.IsNullOrEmpty(fetchedPrductInfo.FetchedSize)
+            )
+            {
+                ProductTypeInfo.Price.ProductSize = fetchedPrductInfo.FetchedSize;
+                MarkDirtyOrSave();
+            }
+        }
+        catch(Exception e)
+        {
+            Debug.WriteLine(e);
+        }
+    }
+
+    private CancellationTokenSource SaveCanceled;
+    private async void MarkDirtyOrSave()
+    {
+        isDirty = true;
+        if (showSaveButton)
+        {
+            return;
+        }
+
+        try
+        {
+            if (SaveCanceled != null)
+            {
+                SaveCanceled.Cancel(false);
+            }
+            SaveCanceled = new CancellationTokenSource();
+            await Task.Delay(500, SaveCanceled.Token);
+            await SaveProductTypeInfo();
+        }
+        catch { }
+    }
+
+    void IDisposable.Dispose()
+    {
+        GlobalCallbacks.OnTriggerCallback -= HandleEvent;
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            EditProductTypeJS = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/EditProductType.razor.js");
+            await EditProductTypeJS.InvokeVoidAsync("SetDotNetRef", DotNetObjectReference.Create(this));
+            jsModLoaded = true;
+        }
+
+        if (highlightTypeNameText)
+        {
+            await EditProductTypeJS.InvokeVoidAsync("SelectTypeNameInputText", null);
+            highlightTypeNameText = false;
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async void CheckInputFocus(int index)
+    {
+        await EditProductTypeJS.InvokeVoidAsync("CheckModalFocus", index > -1 ? ScrollTo[index] : null );
+    }
+
+    private void SaveProductTypeInfo(dynamic args)
+    {
+        _ = SaveProductTypeInfo();
+    }
+
+    private async Task<bool> SaveProductTypeInfo()
+    {
+        if (ProductTypeInfo == null || !isDirty) return false;
+        if (string.IsNullOrEmpty(ProductTypeInfo.TypeName))
+        {
+            InputErrors[0] = "Product name required";
+            StateHasChanged();
+            return false;
+        }
+        ProductTypeInfo.ProductId = await VProduct.SaveProduct(ProductTypeInfo.Product);
+        ProductTypeInfo.PriceId = await VPrice.SavePrice(ProductTypeInfo.Price);
+        ProductTypeInfo.Id = await VProductType.SaveProductType(ProductTypeInfo);
+        await StoreCurrentQuantity();
+        if (ListId > 0)
+        {
+            await VList.AddUpdateListItem(ListId, ListItemId, ProductTypeInfo.Id);
+        }
+        isDirty = false;
+        StateHasChanged();
+        
+        GlobalCallbacks.Trigger(GlobalCallbacks.CBKeys.EditProductType, new GlobalCallbacks.EditProductTypeResponse
+        {
+            ProductTypeId = ProductTypeInfo.Id,
+            IsFirst = IsFirst,
+            IsLast = IsLast,
+            ListId = ListId,
+            ListItemId = ListItemId,
+            Quantity = Quantity
+        });
+        return true;
+    }
+
+    private async Task ClearProductTypeDetails(int priceid, int productid)
+    {
+        await VProductType.ClearProductTypeDetails(priceid, productid);
+    }
+
+    private async Task<bool> CheckDirtyAndSave()
+    {
+        var saveChanges = false;
+        if (isDirty)
+        {
+            saveChanges = await DialogService.Confirm(
+                "You have unsaved changes.", "Close Edit Products",
+                new ConfirmOptions()
+                {
+                    CssClass = "confirm_lose_changes",
+                    OkButtonText = "Save & Close",
+                    CancelButtonText = "Close",
+                    CloseDialogOnEsc = false
+                }
+            ) ?? false;
+        }
+        if (saveChanges)
+        {
+            if(!await SaveProductTypeInfo())
+            {
+                return false;
+            };
+        }
+        else
+        {
+            if(ProductTypeId == 0)
+            {
+                if (ProductTypeInfo.PriceId != 0 || ProductTypeInfo.ProductId != 0)
+                {
+                    await ClearProductTypeDetails(ProductTypeInfo.PriceId, ProductTypeInfo.ProductId);
+                }
+            }
+        }
+
+        isDirty = false;
+        return true;
+    }
+
+    [JSInvokable("MakeDirty")]
+    public void MakeDirty()
+    {
+        MarkDirtyOrSave();
+        StateHasChanged();
+    }
+}
